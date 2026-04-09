@@ -1,0 +1,155 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A product in the inventory",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "price": { "type": "number" },
+        "cost": { "type": "number" },
+        "stockQuantity": { "type": "number" },
+        "isTracked": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "isTracked", "createdAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "A supplier of products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A customer who buys products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "An employee of the company",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "salary": { "type": "number" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "role", "salary", "createdAt"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record for an employee",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["present", "absent", "half"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["employeeId", "date", "status", "createdAt"]
+    },
+    "EmployeeTransaction": {
+      "title": "Employee Transaction",
+      "description": "Financial transaction with an employee (salary, bonus, advance)",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["salary", "bonus", "advance"] },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["employeeId", "date", "type", "amount", "createdAt"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Purchase or sales invoice",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["purchase", "sale"] },
+        "partnerId": { "type": "string" },
+        "date": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitPrice": { "type": "number" },
+              "total": { "type": "number" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "partnerId", "date", "totalAmount", "status", "items", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment received or made",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["received", "made"] },
+        "method": { "type": "string", "enum": ["cash", "check", "bank"] },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "partnerId": { "type": "string" },
+        "bankName": { "type": "string" },
+        "reference": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "method", "amount", "date", "createdAt"]
+    },
+    "Check": {
+      "title": "Check",
+      "description": "Check received or issued",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["received", "issued"] },
+        "checkNumber": { "type": "string" },
+        "bankName": { "type": "string" },
+        "amount": { "type": "number" },
+        "issueDate": { "type": "string" },
+        "cashDate": { "type": "string" },
+        "alertDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "cashed", "bounced"] },
+        "partnerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "checkNumber", "bankName", "amount", "issueDate", "cashDate", "alertDate", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": { "schema": "Product", "description": "Products" },
+    "/suppliers/{supplierId}": { "schema": "Supplier", "description": "Suppliers" },
+    "/customers/{customerId}": { "schema": "Customer", "description": "Customers" },
+    "/employees/{employeeId}": { "schema": "Employee", "description": "Employees" },
+    "/attendance/{attendanceId}": { "schema": "Attendance", "description": "Attendance records" },
+    "/employee_transactions/{transactionId}": { "schema": "EmployeeTransaction", "description": "Employee transactions" },
+    "/invoices/{invoiceId}": { "schema": "Invoice", "description": "Invoices" },
+    "/payments/{paymentId}": { "schema": "Payment", "description": "Payments" },
+    "/checks/{checkId}": { "schema": "Check", "description": "Checks" }
+  }
+}

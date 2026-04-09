@@ -1,0 +1,535 @@
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { Plus, Trash2, Banknote, ArrowUpRight, ArrowDownLeft, Store, Users, UserCheck, Calendar, CheckCircle2, X, Wallet, Building2, Ticket } from 'lucide-react';
+
+type PaymentType = 'in' | 'out'; // in = Received (Customers), out = Paid (Suppliers/Processors)
+type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'cheque';
+
+export default function PaymentsPage() {
+  return (
+    <Suspense fallback={<div className="p-10 font-bold text-center">Loading payments...</div>}>
+      <PaymentsContent />
+    </Suspense>
+  );
+}
+
+function PaymentsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initTab = (searchParams.get('tab') as PaymentType) || 'in';
+  
+  const [activeTab, setActiveTab] = useState<PaymentType>(initTab);
+  const [showBuilder, setShowBuilder] = useState(false);
+  
+  const [payments, setPayments] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [availableCheques, setAvailableCheques] = useState<any[]>([]);
+  
+  const generateMemoNo = () => `MEMO-${Math.floor(100000 + Math.random() * 900000)}`;
+
+  const [form, setForm] = useState({
+    contact_id: '',
+    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    method: 'cash' as PaymentMethod,
+    details: {
+      memo_no: '',
+      number: '', // Mobile wallet send/receive number
+      transaction_id: '',
+      bank_name: '',
+      account_name: '',
+      account_number: '',
+      branch: '',
+      datetime: '',
+      cheque_type: 'own' as 'own' | 'customer',
+      cheque_number: '',
+      cheque_date: '',
+      selected_customer_cheque_id: ''
+    },
+    authorized_signature: '',
+    received_by: ''
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!form.details.memo_no) {
+      setForm(prev => ({ ...prev, details: { ...prev.details, memo_no: generateMemoNo() } }));
+    }
+    const tab = searchParams.get('tab');
+    if (tab === 'in' || tab === 'out') {
+      setActiveTab(tab as PaymentType);
+      setShowBuilder(false);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    fetchPayments();
+    fetchContacts();
+    if (activeTab === 'out') {
+       fetchAvailableCustomerCheques();
+    }
+  }, [activeTab]);
+
+  const handleTabChange = (tab: PaymentType) => {
+    setActiveTab(tab);
+    router.push(`/payments?tab=${tab}`);
+  };
+
+  const fetchContacts = async () => {
+    // If Received ('in') => Customers
+    // If Paid ('out') => Suppliers or Processors
+    const targetTypes = activeTab === 'in' ? ['customer'] : ['supplier', 'processor'];
+    const { data } = await supabase.from('contacts').select('*').in('type', targetTypes);
+    setContacts(data || []);
+  };
+
+  const fetchPayments = async () => {
+    const { data } = await supabase
+      .from('payments')
+      .select('*, contacts(name, shop_name, type)')
+      .eq('type', activeTab)
+      .order('created_at', { ascending: false });
+    setPayments(data || []);
+  };
+
+
+  const fetchAvailableCustomerCheques = async () => {
+     // Fetch received customer cheques that haven't bounced or transferred yet
+     const { data } = await supabase.from('checks').select('id, check_number, bank_name, amount').eq('type', 'received').eq('status', 'pending');
+     setAvailableCheques(data || []);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.contact_id || !form.amount || Number(form.amount) <= 0) {
+      alert('Please fill out required fields securely.');
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      // 1. Prepare Payment Payload
+      const paymentPayload = {
+         type: activeTab,
+         contact_id: form.contact_id,
+         amount: Number(form.amount),
+         method: form.method,
+         date: form.date,
+         payment_method_details: form.details,
+         authorized_signature: form.authorized_signature,
+         received_by: form.received_by,
+      };
+
+      const { data: payData, error: payErr } = await supabase.from('payments').insert([paymentPayload]).select().single();
+      if (payErr) {
+         // Fallback if there is a schema error
+         console.error(payErr);
+         throw new Error("Make sure Supabase Schema is up to date");
+      }
+
+      // 2. Advanced Action: Cross-reference Check Endorsements
+      if (form.method === 'cheque') {
+         if (activeTab === 'in') { // Received Cheque
+            await supabase.from('checks').insert([{
+               type: 'received',
+               check_number: form.details.cheque_number,
+               bank_name: form.details.account_name, // Map account name/bank 
+               amount: Number(form.amount),
+               issue_date: form.date,
+               cash_date: form.details.cheque_date,
+               status: 'pending',
+               partner_id: form.contact_id
+            }]);
+         } else if (activeTab === 'out') { // Paid Cheque
+            if (form.details.cheque_type === 'own') {
+               await supabase.from('checks').insert([{
+                  type: 'issued',
+                  check_number: form.details.cheque_number,
+                  bank_name: form.details.bank_name,
+                  amount: Number(form.amount),
+                  issue_date: form.date,
+                  cash_date: form.details.cheque_date,
+                  status: 'pending',
+                  partner_id: form.contact_id
+               }]);
+            } else if (form.details.cheque_type === 'customer' && form.details.selected_customer_cheque_id) {
+               // ENDORSE EXISTING CUSTOMER CHEQUE
+               await supabase.from('checks').update({
+                  status: 'transferred',
+                  partner_id: form.contact_id
+               }).eq('id', form.details.selected_customer_cheque_id);
+            }
+         }
+      }
+
+      setShowBuilder(false);
+      resetForm();
+      fetchPayments();
+      if (activeTab === 'out') fetchAvailableCustomerCheques();
+
+    } catch (e: any) {
+      console.error(e);
+      alert('Failed saving payment logs.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setForm({
+      contact_id: '', date: new Date().toISOString().split('T')[0], amount: '', method: 'cash',
+      details: { memo_no: generateMemoNo(), number: '', transaction_id: '', bank_name: '', account_name: '', account_number: '', branch: '', datetime: '', cheque_type: 'own', cheque_number: '', cheque_date: '', selected_customer_cheque_id: '' },
+      authorized_signature: '', received_by: ''
+    });
+  };
+
+  const handleDelete = async (id: string, paymentDetails: any) => {
+    if(!window.confirm("Delete this payment? This cannot be undone.")) return;
+    await supabase.from('payments').delete().eq('id', id);
+    fetchPayments();
+  };
+
+  // Complex Dynamic Form rendering
+  const renderMethodForm = () => {
+      // --- MOBILE WALLET ---
+      if (['bikash', 'nagad', 'rocket', 'upay'].includes(form.method)) {
+         return (
+            <div className={`grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100`}>
+               <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                     {activeTab === 'in' ? 'Send Number (Customer\'s)' : 'Received Number (Supplier/Processor\'s)'}
+                  </label>
+                  <input required placeholder="+8801..." type="text" value={form.details.number} onChange={e => setForm({...form, details: {...form.details, number: e.target.value}})} className="w-full border rounded-lg p-2.5 outline-none focus:ring-1 bg-gray-50 text-gray-900 font-bold" />
+               </div>
+               <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction ID</label>
+                  <input required placeholder="TRX..." type="text" value={form.details.transaction_id} onChange={e => setForm({...form, details: {...form.details, transaction_id: e.target.value}})} className="w-full border rounded-lg p-2.5 outline-none focus:ring-1 bg-gray-50 text-gray-900 font-mono font-bold uppercase cursor-text select-text" />
+               </div>
+            </div>
+         );
+      }
+      
+      // --- BANK TRANSFER ---
+      if (form.method === 'bank_transfer') {
+         if (activeTab === 'in') { // Received
+            return (
+               <div className="grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
+                     <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Receive Date and Time</label>
+                     <input required type="datetime-local" value={form.details.datetime} onChange={e => setForm({...form, details: {...form.details, datetime: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+               </div>
+            );
+         } else { // Paid
+            return (
+               <div className="grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
+                  <div className="col-span-2 md:col-span-1">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
+                     <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Name</label>
+                     <input required type="text" value={form.details.account_name} onChange={e => setForm({...form, details: {...form.details, account_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Number</label>
+                     <input required type="text" value={form.details.account_number} onChange={e => setForm({...form, details: {...form.details, account_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Branch</label>
+                     <input required type="text" value={form.details.branch} onChange={e => setForm({...form, details: {...form.details, branch: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+                  <div className="col-span-2">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Send Date and Time</label>
+                     <input required type="datetime-local" value={form.details.datetime} onChange={e => setForm({...form, details: {...form.details, datetime: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+               </div>
+            );
+         }
+      }
+
+      // --- CHEQUE ---
+      if (form.method === 'cheque') {
+         if (activeTab === 'in') { // Received
+            return (
+               <div className="grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
+                  <div className="col-span-2 md:col-span-1">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Account Name</label>
+                     <input required type="text" value={form.details.account_name} onChange={e => setForm({...form, details: {...form.details, account_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Account Number</label>
+                     <input required type="text" value={form.details.account_number} onChange={e => setForm({...form, details: {...form.details, account_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Number</label>
+                     <input required type="text" value={form.details.cheque_number} onChange={e => setForm({...form, details: {...form.details, cheque_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Date</label>
+                     <input required type="date" value={form.details.cheque_date} onChange={e => setForm({...form, details: {...form.details, cheque_date: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
+               </div>
+            );
+         } else { // Paid
+            return (
+               <div className="mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100 flex flex-col gap-4">
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Origin</label>
+                     <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-gray-50 flex-1">
+                           <input type="radio" checked={form.details.cheque_type === 'own'} onChange={() => setForm({...form, details: {...form.details, cheque_type: 'own'}})} className="w-4 h-4 text-indigo-600" />
+                           <span className="font-bold text-gray-800">Own Cheque</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-gray-50 flex-1">
+                           <input type="radio" checked={form.details.cheque_type === 'customer'} onChange={() => setForm({...form, details: {...form.details, cheque_type: 'customer'}})} className="w-4 h-4 text-indigo-600" />
+                           <span className="font-bold text-gray-800">Customer's Cheque (Endorse)</span>
+                        </label>
+                     </div>
+                  </div>
+
+                  {form.details.cheque_type === 'own' ? (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
+                           <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                        </div>
+                        <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Number</label>
+                           <input required type="text" value={form.details.cheque_number} onChange={e => setForm({...form, details: {...form.details, cheque_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
+                        </div>
+                        <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Date</label>
+                           <input required type="date" value={form.details.cheque_date} onChange={e => setForm({...form, details: {...form.details, cheque_date: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                        </div>
+                     </div>
+                  ) : (
+                     <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 bg-amber-100 text-amber-800 px-2 py-1 rounded inline-flex mb-2">Select the Customer's Cheque to Transfer</label>
+                        <select required value={form.details.selected_customer_cheque_id} onChange={e => setForm({...form, details: {...form.details, selected_customer_cheque_id: e.target.value}})} className="w-full border rounded-lg p-3 bg-gray-50 font-bold text-gray-900 outline-none">
+                           <option value="" disabled>-- Available Cheques --</option>
+                           {availableCheques.map(c => (
+                              <option key={c.id} value={c.id}>#{c.check_number} - {c.bank_name} - ${c.amount}</option>
+                           ))}
+                        </select>
+                     </div>
+                  )}
+               </div>
+            );
+         }
+      }
+
+      return null; // Cash needs no extra fields
+  };
+
+  return (
+    <div className="pb-12 font-sans animate-in fade-in duration-300">
+      
+      {/* Dynamic Header */}
+      <div className={`p-8 rounded-3xl text-white shadow-lg relative overflow-hidden mb-8 transition-colors duration-500 
+         ${activeTab === 'in' ? 'bg-gradient-to-r from-emerald-800 to-green-900' : 'bg-gradient-to-r from-orange-800 to-rose-900'}`}>
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-5 blur-3xl pointer-events-none"></div>
+        <div className="relative z-10 flex justify-between items-end">
+           <div>
+             <p className="text-white/60 font-bold mb-1 text-sm tracking-widest uppercase flex items-center gap-2">
+               <Wallet className="w-4 h-4" /> Comprehensive Transactions
+             </p>
+             <h1 className="text-4xl font-extrabold tracking-tight mb-2">
+                {activeTab === 'in' ? 'Received Payments' : 'Paid Out'}
+             </h1>
+             <p className="text-white/80 max-w-xl text-sm md:text-base">
+                {activeTab === 'in' ? 'Log incoming payments directly from Customers via Cash, Mobile Wallet, Bank, or direct Cheque.' : 
+                 'Log outgoing payments directly to Suppliers/Processors using Cash, Wallet, Bank, or issuing Cheques.'}
+             </p>
+           </div>
+           
+           {!showBuilder && (
+             <button onClick={() => { resetForm(); setShowBuilder(true); }} className="bg-white/20 hover:bg-white text-white hover:text-slate-900 px-6 py-3 rounded-xl font-bold flex items-center gap-2 backdrop-blur-sm transition-all shadow-lg">
+                <Plus className="w-5 h-5" /> 
+                Add New Record
+             </button>
+           )}
+        </div>
+      </div>
+
+      {!showBuilder ? (
+         <>
+            {/* Invoices Table */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+               <table className="w-full text-left">
+               <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{activeTab === 'in' ? 'Customer Name' : 'Supplier / Processor'}</th>
+                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Method</th>
+                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Signature / Received</th>
+                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-gray-100">
+                  {payments.map(p => {
+                     const isJSON = p.payment_method_details !== null;
+                     const target_id = isJSON ? p.payment_method_details.partner_contact_id : null;
+                     // We match target_id against contacts in memory (or relying on join if it existed). We will just render json data.
+                     
+                     return (
+                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                           <span className="text-sm font-bold text-slate-800 block">{new Date(p.date).toLocaleDateString()}</span>
+                           <span className="text-[10px] text-gray-400 font-mono">#{p.id.substring(0,6)}</span>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-bold text-indigo-900 border-l border-gray-100">
+                           {contacts.find(c => c.id === target_id)?.name || 'Linked to Invoice'}
+                        </td>
+                        <td className="px-6 py-4">
+                           <span className="text-xs px-2 py-1 bg-slate-100 text-slate-700 font-extrabold uppercase rounded border border-slate-200 whitespace-nowrap">{p.method.replace('_', ' ')}</span>
+                           {isJSON && p.payment_method_details.transaction_id && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase">TX: {p.payment_method_details.transaction_id}</div>}
+                           {isJSON && p.payment_method_details.cheque_number && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase">CHK: {p.payment_method_details.cheque_number}</div>}
+                        </td>
+                        <td className="px-6 py-4 font-extrabold text-slate-900 text-lg">
+                           ${Number(p.amount).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4">
+                           <div className="text-xs font-semibold text-gray-600 block"><span className="text-gray-400">Sig:</span> {p.authorized_signature || '-'}</div>
+                           <div className="text-xs font-semibold text-gray-600 block mt-0.5"><span className="text-gray-400">Rcv:</span> {p.received_by || '-'}</div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                           <button onClick={() => handleDelete(p.id, p)} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"><Trash2 className="w-5 h-5"/></button>
+                        </td>
+                        </tr>
+                     );
+                  })}
+                  {payments.length === 0 && (
+                     <tr>
+                        <td colSpan={6} className="p-12 text-center text-gray-400">
+                           <Wallet className="w-12 h-12 mx-auto text-gray-200 mb-3" />
+                           <p className="font-medium">No records found. Note: Standalone tracking only.</p>
+                        </td>
+                     </tr>
+                  )}
+               </tbody>
+               </table>
+            </div>
+         </>
+      ) : (
+
+         /* --- PAYMENT BUILDER --- */
+         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-500 pb-10">
+            <div className={`p-6 border-b border-gray-100 flex justify-between items-center text-white
+               ${activeTab === 'in' ? 'bg-green-600' : 'bg-orange-600'}`}>
+               <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Banknote className="w-6 h-6" /> 
+                  Log New {activeTab === 'in' ? 'Received Payment' : 'Outgoing Payment'}
+               </h2>
+               <button onClick={() => setShowBuilder(false)} className="bg-black/20 hover:bg-black/40 px-4 py-2 rounded-lg text-sm font-bold transition-all">Cancel</button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-8 max-w-5xl mx-auto space-y-10">
+               
+               {/* 1. Core Info */}
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner relative">
+                  <div className="absolute top-4 right-4 text-slate-200"><Users className="w-16 h-16"/></div>
+
+                  <div className="col-span-1 md:col-span-2 relative z-10 mb-2 border-b border-gray-200 pb-4 flex items-center justify-between">
+                     <span className="text-gray-500 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                        <Ticket className="w-4 h-4" /> Memo Number (Auto-generated)
+                     </span>
+                     <span className="font-mono text-lg font-extrabold text-indigo-900 bg-indigo-50 px-4 py-1.5 rounded-lg border border-indigo-100 shadow-sm">
+                        {form.details.memo_no}
+                     </span>
+                  </div>
+
+                  <div className="relative z-10">
+                     <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-indigo-500" /> Select {activeTab === 'in' ? 'Customer' : 'Supplier / Processor'}
+                     </label>
+                     <select required value={form.contact_id} onChange={e => setForm({...form, contact_id: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-slate-800 outline-none font-bold text-gray-900 bg-white text-lg">
+                        <option value="" disabled>-- Choose Contact --</option>
+                        {contacts.map(c => <option key={c.id} value={c.id}>{c.name} {c.shop_name ? `- ${c.shop_name}` : ''}</option>)}
+                     </select>
+                  </div>
+                  <div className="relative z-10">
+                     <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-indigo-500" /> Payment Date
+                     </label>
+                     <input required type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-slate-800 outline-none font-bold text-gray-900 bg-white text-lg" />
+                  </div>
+               </div>
+
+               {/* 2. Transaction Module */}
+               <div className={`p-6 rounded-2xl border shadow-sm ${activeTab === 'in' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50/50 border-orange-100'}`}>
+                  <h3 className={`text-xl font-extrabold mb-6 flex items-center gap-2 ${activeTab === 'in' ? 'text-green-900' : 'text-orange-900'}`}>
+                     <Wallet className="w-5 h-5" /> Transaction Definition
+                  </h3>
+                  
+                  <div className="space-y-6">
+                     <div>
+                        <label className={`block text-sm font-bold mb-1.5 ${activeTab === 'in' ? 'text-green-900' : 'text-orange-900'}`}>
+                           Total Amount
+                        </label>
+                        <div className="relative">
+                           <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${activeTab === 'in' ? 'text-green-600' : 'text-orange-600'}`}>$</span>
+                           <input required type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className={`w-full pl-8 pr-4 py-3.5 border rounded-xl text-2xl font-extrabold outline-none focus:ring-2 shadow-inner bg-white ${activeTab === 'in' ? 'border-green-200 text-green-900 focus:ring-green-500' : 'border-orange-200 text-orange-900 focus:ring-orange-500'}`} />
+                        </div>
+                     </div>
+
+                     <div className="animate-in fade-in slide-in-from-top-2 border-t pt-4 border-opacity-50 border-inherit">
+                        <label className={`block text-sm font-bold mb-2 ${activeTab === 'in' ? 'text-green-900' : 'text-orange-900'}`}>Payment Engine Type</label>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-white p-3 rounded-2xl border shadow-inner">
+                           {['cash', 'bikash', 'nagad', 'rocket', 'upay', 'bank_transfer', 'cheque'].map(m => (
+                              <label key={m} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${form.method === m ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-500 shadow-sm' : 'border-gray-100 hover:bg-gray-50'}`}>
+                                 <input type="radio" value={m} checked={form.method === m} onChange={() => setForm({...form, method: m as PaymentMethod})} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
+                                 <span className={`font-bold text-sm uppercase tracking-wide ${form.method === m ? 'text-indigo-900' : 'text-gray-600'}`}>{m.replace('_', ' ')}</span>
+                              </label>
+                           ))}
+                        </div>
+                        
+                        <div className="mt-4">
+                        {renderMethodForm()}
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* 3. Signatures */}
+               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <h3 className="text-xl font-extrabold text-slate-800 mb-6 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Signatures & Authorizations</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                     <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Authorized Signature (Manager Layer)</label>
+                        <input required type="text" placeholder="e.g. John Doe, Management" value={form.authorized_signature} onChange={e => setForm({...form, authorized_signature: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 font-bold text-gray-900 bg-white outline-none focus:ring-2 focus:ring-slate-800" />
+                     </div>
+                     <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Received By (Employee / Teller)</label>
+                        <input required type="text" placeholder="e.g. Alice Teller" value={form.received_by} onChange={e => setForm({...form, received_by: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 font-bold text-gray-900 bg-white outline-none focus:ring-2 focus:ring-slate-800" />
+                     </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-6">
+                     <button type="submit" disabled={submitting} className={`w-full py-4 rounded-xl font-extrabold text-white shadow-xl transition-all flex items-center justify-center gap-3 text-lg disabled:opacity-70 disabled:cursor-not-allowed
+                        ${activeTab === 'in' ? 'bg-green-600 hover:bg-green-700 hover:shadow-green-200' : 'bg-orange-600 hover:bg-orange-700 hover:shadow-orange-200'}`}>
+                        {submitting ? 'Executing Server Record...' : (
+                           <>
+                              <Ticket className="w-6 h-6" />
+                              {activeTab === 'in' ? 'Log Received Payment to Ledger' : 'Process and Log Paid Disbursement'}
+                           </>
+                        )}
+                     </button>
+                  </div>
+               </div>
+
+            </form>
+         </div>
+      )}
+    </div>
+  );
+}
