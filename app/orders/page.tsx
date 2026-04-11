@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { handleSupabaseError } from '@/lib/supabase-utils';
 import {
-  Plus, Trash2, Pencil, Search, ShoppingCart, X, ChevronDown, Package
+  Plus, Trash2, Pencil, Search, ShoppingCart, X, ChevronDown, Package, Eye, AlertTriangle, CheckCircle, XCircle, FileText
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -42,6 +42,7 @@ const statusStyles: Record<string, string> = {
 // ─── Main content ─────────────────────────────────────────────────────
 function OrdersContent() {
   const searchParams  = useSearchParams();
+  const router        = useRouter();
   const tab           = searchParams.get('tab') ?? 'sales';
   const isSales       = tab === 'sales';
   const orderType     = isSales ? 'sales' : 'purchase';
@@ -54,6 +55,11 @@ function OrdersContent() {
   const [showForm,     setShowForm]     = useState(false);
   const [editingId,    setEditingId]    = useState<string | null>(null);
   const [submitting,   setSubmitting]   = useState(false);
+
+  // ── view modal state ──
+  const [viewingOrder,  setViewingOrder]  = useState<Order | null>(null);
+  const [stockMap,      setStockMap]      = useState<Record<string, number>>({});
+  const [loadingStock,  setLoadingStock]  = useState(false);
 
   // ── form state ──
   const emptyForm = {
@@ -86,7 +92,8 @@ function OrdersContent() {
   };
 
   const fetchProducts = async () => {
-    const { data } = await supabase.from('products').select('id,name,price,unit').eq('category', 'finished-goods');
+    const category = isSales ? 'finished-goods' : 'raw-materials';
+    const { data } = await supabase.from('products').select('id,name,price,cost,unit').eq('category', category);
     setProducts(data ?? []);
   };
 
@@ -123,12 +130,16 @@ function OrdersContent() {
   const selectProduct = (id: string) => {
     const p = products.find(x => x.id === id);
     if (!p) return;
+    // For purchase: prefer cost, fallback to price. For sales: prefer price, fallback to cost.
+    const autoPrice = isSales
+      ? (Number(p.price) || Number(p.cost) || 0)
+      : (Number(p.cost)  || Number(p.price) || 0);
     setItemForm((prev: any) => ({
       ...prev,
       product_id:   p.id,
       product_name: p.name,
       unit:         p.unit || 'pcs',
-      unit_price:   p.price || 0,
+      unit_price:   autoPrice,
     }));
   };
 
@@ -197,8 +208,161 @@ function OrdersContent() {
 
   const headingTitle = isSales ? 'Sales Orders' : 'Purchase Orders';
 
+  // ── open view modal and fetch live stock ──
+  const openView = async (order: Order) => {
+    setViewingOrder(order);
+    setLoadingStock(true);
+    const ids = (order.items ?? []).map(i => i.product_id).filter(Boolean);
+    if (ids.length > 0) {
+      const { data } = await supabase
+        .from('products')
+        .select('id, stock_quantity')
+        .in('id', ids);
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((p: any) => { map[p.id] = Number(p.stock_quantity ?? 0); });
+      setStockMap(map);
+    } else {
+      setStockMap({});
+    }
+    setLoadingStock(false);
+  };
+
+  // ── generate invoice from order ──
+  const generateInvoice = (order: Order) => {
+    const invoiceTab = order.type === 'sales' ? 'sell' : 'buy';
+    const payload = {
+      contact_id:   order.contact_id ?? '',
+      contact_name: order.contact_name ?? '',
+      date:         order.date,
+      items: (order.items ?? []).map(i => ({
+        product_id: i.product_id,
+        quantity:   i.quantity,
+        price:      i.unit_price,
+      })),
+    };
+    const encoded = encodeURIComponent(JSON.stringify(payload));
+    router.push(`/invoices?tab=${invoiceTab}&from_order=${encoded}`);
+  };
+
   return (
     <div className="pb-10">
+
+      {/* ─── VIEW ORDER MODAL ─── */}
+      {viewingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex justify-between items-start p-6 border-b border-gray-100 bg-gradient-to-r from-indigo-700 to-indigo-900 text-white rounded-t-2xl">
+              <div>
+                <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Order Details</p>
+                <h2 className="text-2xl font-black">{viewingOrder.order_no}</h2>
+                <div className="flex items-center gap-3 mt-2 text-sm text-indigo-100">
+                  <span>{viewingOrder.contact_name || '—'}</span>
+                  <span>·</span>
+                  <span>{viewingOrder.date}</span>
+                  <span>·</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusStyles[viewingOrder.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {viewingOrder.status}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setViewingOrder(null)} className="text-indigo-200 hover:text-white hover:bg-indigo-800 p-2 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Product Stock Table */}
+            <div className="p-6">
+              <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Package className="w-4 h-4" /> Products & Stock Availability
+              </h3>
+
+              {loadingStock ? (
+                <div className="py-10 text-center text-indigo-600 font-bold animate-pulse">Loading stock data...</div>
+              ) : (
+                <div className="space-y-3">
+                  {(viewingOrder.items ?? []).map((item, idx) => {
+                    const inStock = stockMap[item.product_id] ?? 0;
+                    const ordered = Number(item.quantity);
+                    const isSufficient = inStock >= ordered;
+                    const isPartial = inStock > 0 && inStock < ordered;
+
+                    return (
+                      <div key={idx} className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        isSufficient ? 'border-green-200 bg-green-50/40' :
+                        isPartial    ? 'border-yellow-200 bg-yellow-50/40' :
+                                       'border-red-200 bg-red-50/40'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          {isSufficient ? (
+                            <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+                          ) : isPartial ? (
+                            <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-bold text-gray-900">{item.product_name}</p>
+                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                              Unit Price: ৳{item.unit_price} · Subtotal: ৳{item.subtotal?.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          {/* Ordered badge */}
+                          <div className="text-center bg-indigo-100 rounded-xl px-4 py-2">
+                            <p className="text-xs font-bold text-indigo-500 uppercase tracking-wide">Ordered</p>
+                            <p className="text-xl font-black text-indigo-700">{ordered} <span className="text-xs font-semibold">{item.unit}</span></p>
+                          </div>
+
+                          <span className="text-gray-400 font-bold">out of</span>
+
+                          {/* In Stock badge */}
+                          <div className={`text-center rounded-xl px-4 py-2 ${
+                            isSufficient ? 'bg-green-100' : isPartial ? 'bg-yellow-100' : 'bg-red-100'
+                          }`}>
+                            <p className={`text-xs font-bold uppercase tracking-wide ${
+                              isSufficient ? 'text-green-600' : isPartial ? 'text-yellow-600' : 'text-red-500'
+                            }`}>In Stock</p>
+                            <p className={`text-xl font-black ${
+                              isSufficient ? 'text-green-700' : isPartial ? 'text-yellow-700' : 'text-red-600'
+                            }`}>{inStock} <span className="text-xs font-semibold">{item.unit}</span></p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Total */}
+              <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
+                <span className="text-sm font-bold text-gray-500">Order Total</span>
+                <span className="text-2xl font-black text-indigo-700">৳{Number(viewingOrder.total).toFixed(2)}</span>
+              </div>
+
+              {/* Legend */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-green-500" /> Sufficient stock</span>
+                <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-yellow-500" /> Partial stock</span>
+                <span className="flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Out of stock</span>
+              </div>
+
+              {/* Generate Invoice Button */}
+              <div className="mt-6 pt-5 border-t border-gray-100 flex justify-end">
+                <button
+                  onClick={() => generateInvoice(viewingOrder)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:shadow-xl"
+                >
+                  <FileText className="w-5 h-5" />
+                  Generate Invoice
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -440,6 +604,9 @@ function OrdersContent() {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{order.date}</td>
                   <td className="px-6 py-4 text-right">
+                    <button onClick={() => openView(order)} className="text-gray-400 hover:text-indigo-600 p-2" title="View Order">
+                      <Eye className="w-4 h-4" />
+                    </button>
                     <button onClick={() => handleEdit(order)} className="text-gray-400 hover:text-indigo-600 p-2">
                       <Pencil className="w-4 h-4" />
                     </button>

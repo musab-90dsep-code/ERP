@@ -64,8 +64,33 @@ function InvoicesContent() {
 
    useEffect(() => {
       const tab = searchParams.get('tab');
+      const fromOrder = searchParams.get('from_order');
+
       if (tab === 'buy' || tab === 'sell' || tab === 'return') {
          setActiveTab(tab as InvoiceType);
+      }
+
+      // Pre-fill from Order if param exists
+      if (fromOrder) {
+         try {
+            const order = JSON.parse(decodeURIComponent(fromOrder));
+            setForm(prev => ({
+               ...prev,
+               contact_id: order.contact_id || '',
+               date:       order.date || prev.date,
+               items:      (order.items && order.items.length > 0)
+                  ? order.items.map((i: any) => ({
+                       product_id: i.product_id || '',
+                       quantity:   Number(i.quantity) || 1,
+                       price:      Number(i.price) || 0,
+                    }))
+                  : prev.items,
+            }));
+            setShowBuilder(true);
+         } catch (e) {
+            console.error('Failed to parse from_order param', e);
+         }
+      } else {
          setShowBuilder(false);
       }
    }, [searchParams]);
