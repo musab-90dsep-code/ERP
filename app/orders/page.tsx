@@ -304,7 +304,7 @@ function OrdersContent() {
                           <div>
                             <p className="font-bold text-gray-900">{item.product_name}</p>
                             <p className="text-xs text-gray-500 font-medium mt-0.5">
-                              Unit Price: ৳{item.unit_price} · Subtotal: ৳{item.subtotal?.toFixed(2)}
+                              Unit Price: ৳ {item.unit_price} · Subtotal: ৳ {item.subtotal?.toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -339,7 +339,7 @@ function OrdersContent() {
               {/* Total */}
               <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
                 <span className="text-sm font-bold text-gray-500">Order Total</span>
-                <span className="text-2xl font-black text-indigo-700">৳{Number(viewingOrder.total).toFixed(2)}</span>
+                <span className="text-2xl font-black text-indigo-700">৳ {Number(viewingOrder.total).toFixed(2)}</span>
               </div>
 
               {/* Legend */}
@@ -500,8 +500,8 @@ function OrdersContent() {
                       <tr key={idx}>
                         <td className="px-3 py-2 font-medium text-gray-800">{item.product_name}</td>
                         <td className="px-3 py-2 text-gray-600">{item.quantity} {item.unit}</td>
-                        <td className="px-3 py-2 text-gray-600">৳{item.unit_price}</td>
-                        <td className="px-3 py-2 font-bold text-gray-800">৳{item.subtotal.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-gray-600">৳ {item.unit_price}</td>
+                        <td className="px-3 py-2 font-bold text-gray-800">৳ {item.subtotal.toFixed(2)}</td>
                         <td className="px-3 py-2 text-right">
                           <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600">
                             <X className="w-4 h-4" />
@@ -513,7 +513,7 @@ function OrdersContent() {
                   <tfoot className="bg-gray-50">
                     <tr>
                       <td colSpan={3} className="px-3 py-2 text-right text-sm font-bold text-gray-700">Total:</td>
-                      <td className="px-3 py-2 text-base font-bold text-indigo-700">৳{orderTotal.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-base font-bold text-indigo-700">৳ {orderTotal.toFixed(2)}</td>
                       <td />
                     </tr>
                   </tfoot>
@@ -596,7 +596,7 @@ function OrdersContent() {
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-bold text-gray-900">৳{Number(order.total).toFixed(2)}</td>
+                  <td className="px-6 py-4 font-bold text-gray-900">৳ {Number(order.total).toFixed(2)}</td>
                   <td className="px-6 py-4">
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${statusStyles[order.status] ?? 'bg-gray-100 text-gray-600'}`}>
                       {order.status}

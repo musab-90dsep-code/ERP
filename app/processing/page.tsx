@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -308,11 +308,11 @@ function ProcessingContent() {
                   <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex justify-between items-center transition-all animate-in fade-in">
                      <div>
                        <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">Unit Processing Cost</span>
-                       <span className="text-lg font-extrabold text-indigo-900">${(processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0)).toFixed(2)}</span>
+                       <span className="text-lg font-extrabold text-indigo-900">৳ {(processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0)).toFixed(2)}</span>
                      </div>
                      <div className="text-right">
                        <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">Total Est. Cost</span>
-                       <span className="text-xl font-extrabold text-indigo-900">${(Number(quantity || 0) * (processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0))).toFixed(2)}</span>
+                       <span className="text-xl font-extrabold text-indigo-900">৳ {(Number(quantity || 0) * (processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0))).toFixed(2)}</span>
                      </div>
                   </div>
                 )}
@@ -416,7 +416,7 @@ function ProcessingContent() {
                                 </div>
                              </td>
                              <td className="px-6 py-4 text-sm max-w-[200px]">
-                                {log.process_type && <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded capitalize mb-1 mr-1 border border-slate-200">{log.process_type} {log.total_cost ? `($${Number(log.total_cost).toLocaleString()})` : ''}</span>}
+                                {log.process_type && <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded capitalize mb-1 mr-1 border border-slate-200">{log.process_type} {log.total_cost ? `(৳ ${Number(log.total_cost).toLocaleString()})` : ''}</span>}
                                 {log.note && <p className="text-xs text-gray-500 truncate mb-1" title={log.note}>{log.note}</p>}
                                 
                                 {log.photo_urls && log.photo_urls.length > 0 && (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Trash2, DollarSign, Calendar, FileText, User, Receipt, Search, X, Banknote } from 'lucide-react';
 
@@ -151,21 +151,21 @@ export default function TransactionTab({ employees, transactions, attendance = [
               <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><DollarSign className="w-6 h-6"/></div>
               <div>
                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Disbursed</p>
-                 <h3 className="text-2xl font-black text-gray-900">${totalPaid.toLocaleString()}</h3>
+                 <h3 className="text-2xl font-black text-gray-900">৳{totalPaid.toLocaleString()}</h3>
               </div>
            </div>
            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
               <div className="bg-green-50 p-3 rounded-xl text-green-600"><Receipt className="w-6 h-6"/></div>
               <div>
                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Salary Paid</p>
-                 <h3 className="text-2xl font-black text-gray-900">${totalSalary.toLocaleString()}</h3>
+                 <h3 className="text-2xl font-black text-gray-900">৳{totalSalary.toLocaleString()}</h3>
               </div>
            </div>
            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
               <div className="bg-purple-50 p-3 rounded-xl text-purple-600"><FileText className="w-6 h-6"/></div>
               <div>
                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Advances Issued</p>
-                 <h3 className="text-2xl font-black text-gray-900">${totalAdvance.toLocaleString()}</h3>
+                 <h3 className="text-2xl font-black text-gray-900">৳{totalAdvance.toLocaleString()}</h3>
               </div>
            </div>
         </div>
@@ -300,7 +300,7 @@ export default function TransactionTab({ employees, transactions, attendance = [
                        </span>
                      </td>
                      <td className="px-6 py-4 text-right">
-                       <span className="font-black text-gray-900">${Number(t.amount || 0).toLocaleString()}</span>
+                       <span className="font-black text-gray-900">৳{Number(t.amount || 0).toLocaleString()}</span>
                      </td>
                      <td className="px-6 py-4">
                        <span className="text-sm font-medium text-gray-500">{t.note || <span className="italic opacity-50">N/A</span>}</span>

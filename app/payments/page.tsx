@@ -381,7 +381,7 @@ function PaymentsContent() {
                            {isJSON && p.payment_method_details.cheque_number && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase block">CHK: {p.payment_method_details.cheque_number}</div>}
                         </td>
                         <td className="px-6 py-4 font-extrabold text-slate-900 text-lg">
-                           ${Number(p.amount).toLocaleString()}
+                           <span style={{fontFamily: "sans-serif"}} className="font-extrabold pr-[2px]">৳</span> {Number(p.amount).toLocaleString()}
                         </td>
                         <td className="px-6 py-4">
                            <div className="text-xs font-semibold text-gray-600 block"><span className="text-gray-400">Sig:</span> {p.authorized_signature || '-'}</div>
@@ -462,7 +462,7 @@ function PaymentsContent() {
                            Total Amount
                         </label>
                         <div className="relative">
-                           <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${activeTab === 'in' ? 'text-green-600' : 'text-orange-600'}`}>$</span>
+                           <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${activeTab === 'in' ? 'text-green-600' : 'text-orange-600'}`}><span style={{fontFamily: "sans-serif"}} className="font-extrabold pr-[2px]">৳</span></span>
                            <input required type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className={`w-full pl-8 pr-4 py-3.5 border rounded-xl text-2xl font-extrabold outline-none focus:ring-2 shadow-inner bg-white ${activeTab === 'in' ? 'border-green-200 text-green-900 focus:ring-green-500' : 'border-orange-200 text-orange-900 focus:ring-orange-500'}`} />
                         </div>
                      </div>

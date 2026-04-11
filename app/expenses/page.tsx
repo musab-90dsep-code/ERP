@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -286,7 +286,7 @@ function ExpensesContent() {
                               <div className="flex flex-col justify-end">
                                  <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex justify-between items-center h-[54px]">
                                     <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Total</span>
-                                    <span className="text-2xl font-black text-emerald-600">${(Number(payData.price_per_unit || 0) * selectedExpense.quantity).toLocaleString()}</span>
+                                    <span className="text-2xl font-black text-emerald-600">৳ {(Number(payData.price_per_unit || 0) * selectedExpense.quantity).toLocaleString()}</span>
                                  </div>
                               </div>
                            </div>
@@ -384,7 +384,7 @@ function ExpensesContent() {
                                     ) : <div className="text-[10px] text-gray-400">No photos attached</div>}
                                  </td>
                                  <td className="px-6 py-4 text-right">
-                                    <span className="font-black text-lg text-emerald-600">${Number(e.total_amount).toLocaleString()}</span>
+                                    <span className="font-black text-lg text-emerald-600">৳ {Number(e.total_amount).toLocaleString()}</span>
                                     <span className="block text-[10px] uppercase font-bold text-green-500 mt-0.5">Paid</span>
                                  </td>
                               </tr>

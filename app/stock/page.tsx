@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -144,7 +144,24 @@ function StockContent() {
         finalSku = `SKU-${Date.now().toString().slice(-6)}`;
       }
 
-      const payload = { ...formData, sku: finalSku, image_urls: finalImageUrls, category };
+      const payload = {
+        category,
+        name:                    formData.name,
+        sku:                     finalSku,
+        price:                   formData.price === '' ? 0 : Number(formData.price),
+        cost:                    formData.cost  === '' ? 0 : Number(formData.cost),
+        stock_quantity:          formData.stock_quantity === '' ? 0 : Number(formData.stock_quantity),
+        unit:                    formData.unit || 'pcs',
+        unit_value:              formData.unit_value ? Number(formData.unit_value) : 1,
+        barcode:                 formData.barcode || null,
+        is_tracked:              !!formData.is_tracked,
+        low_stock_alert:         !!formData.low_stock_alert,
+        minimum_stock:           formData.minimum_stock === '' ? 0 : Number(formData.minimum_stock),
+        use_for_processing:      !!formData.use_for_processing,
+        processing_price_auto:   formData.processing_price_auto   === '' ? 0 : Number(formData.processing_price_auto),
+        processing_price_manual: formData.processing_price_manual === '' ? 0 : Number(formData.processing_price_manual),
+        image_urls:              finalImageUrls,
+      };
 
       if (editingId) {
         const { error } = await supabase.from('products').update(payload).eq('id', editingId);
@@ -400,7 +417,7 @@ function StockContent() {
                   )}
                   {!isRawMaterials && visibleColumns.sku && <td className="px-6 py-4 text-sm text-gray-600">{product.sku || '-'}</td>}
                   {visibleColumns.barcode && <td className="px-6 py-4 text-sm text-gray-600">{product.barcode || '-'}</td>}
-                  {visibleColumns.price && <td className="px-6 py-4 font-bold text-gray-900">${product.price}</td>}
+                  {visibleColumns.price && <td className="px-6 py-4 font-bold text-gray-900">৳ {product.price}</td>}
                   {visibleColumns.stock && (
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

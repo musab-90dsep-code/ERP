@@ -227,7 +227,7 @@ export default function Dashboard() {
             <span className="text-[10px] font-black px-2.5 py-1 rounded-full" style={{background:'#eef2ff',color:'#6366f1'}}>NET</span>
           </div>
           <div className="font-black text-3xl mb-0.5" style={{color: totalBalance >= 0 ? '#111827' : '#dc2626', lineHeight:1}}>
-            ৳{Math.abs(totalBalance).toLocaleString()}
+            ৳ {Math.abs(totalBalance).toLocaleString()}
           </div>
           <div className="text-xs font-bold mb-3" style={{color:'#6b7280'}}>Total Balance</div>
           <div className="mt-auto flex items-center gap-1.5 text-[11px] font-bold" style={{color: totalBalance >= 0 ? '#16a34a' : '#dc2626'}}>
@@ -246,7 +246,7 @@ export default function Dashboard() {
             <span className="text-[10px] font-black px-2.5 py-1 rounded-full" style={{background:'#e0f2fe',color:'#0284c7'}}>{stats.products} SKUs</span>
           </div>
           <div className="font-black text-3xl mb-0.5" style={{color:'#111827',lineHeight:1}}>
-            ৳{totalStockValue.toLocaleString()}
+            ৳ {totalStockValue.toLocaleString()}
           </div>
           <div className="text-xs font-bold mb-3" style={{color:'#6b7280'}}>Total Stock Value</div>
           <div className="mt-auto flex items-center gap-1.5 text-[11px] font-bold" style={{color:'#0284c7'}}>
@@ -272,7 +272,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="font-black text-3xl mb-0.5" style={{color:'#111827',lineHeight:1}}>
-            ৳{salesByPeriod[salesPeriod].toLocaleString()}
+            ৳ {salesByPeriod[salesPeriod].toLocaleString()}
           </div>
           <div className="text-xs font-bold mb-3" style={{color:'#6b7280'}}>Total Sales</div>
           <div className="mt-auto flex items-center gap-1.5 text-[11px] font-bold" style={{color:'#059669'}}>
@@ -298,7 +298,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="font-black text-3xl mb-0.5" style={{color:'#111827',lineHeight:1}}>
-            ৳{expensesByPeriod[expensePeriod].toLocaleString()}
+            ৳ {expensesByPeriod[expensePeriod].toLocaleString()}
           </div>
           <div className="text-xs font-bold mb-3" style={{color:'#6b7280'}}>Total Expenses</div>
           <div className="mt-auto flex items-center gap-1.5 text-[11px] font-bold" style={{color:'#d97706'}}>
@@ -419,7 +419,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-black text-sm" style={{color:'#111827'}}>৳{Number(inv.total||0).toLocaleString()}</div>
+                    <div className="font-black text-sm" style={{color:'#111827'}}>৳ {Number(inv.total||0).toLocaleString()}</div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{background:sc.bg,color:sc.color}}>
                       {inv.payment_status}
                     </span>
@@ -445,7 +445,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="font-black text-3xl" style={{color: profit>=0?'#15803d':'#b91c1c',lineHeight:1}}>
-              {profit>=0?'+':'-'}৳{Math.abs(profit).toLocaleString()}
+              {profit>=0?'+':'-'}৳ {Math.abs(profit).toLocaleString()}
             </div>
           </div>
 
@@ -607,7 +607,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="font-black text-sm" style={{color:'#dc2626'}}>৳{Number(c.amount||0).toLocaleString()}</div>
+                        <div className="font-black text-sm" style={{color:'#dc2626'}}>৳ {Number(c.amount||0).toLocaleString()}</div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{background:'#fee2e2',color:'#b91c1c'}}>BOUNCED</span>
                       </div>
                     </div>

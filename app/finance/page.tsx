@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -122,7 +122,7 @@ function FinanceContent() {
                                     <span className="text-xs font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full uppercase tracking-wide">{c.type}</span>
                                     <span className="font-mono text-sm font-bold text-gray-500">#{c.check_number}</span>
                                  </div>
-                                 <div className="font-extrabold text-xl text-gray-900">${Number(c.amount).toLocaleString()}</div>
+                                 <div className="font-extrabold text-xl text-gray-900">৳ {Number(c.amount).toLocaleString()}</div>
                                  <div className="text-sm font-semibold text-gray-600 flex items-center gap-1.5"><Landmark className="w-4 h-4 text-gray-400" /> {c.bank_name}</div>
                                  <div className="text-sm font-bold text-red-600 flex items-center gap-1.5 mt-2 bg-red-50 p-2 rounded-lg border border-red-100">
                                     <CalendarIcon className="w-4 h-4" />
@@ -237,7 +237,7 @@ function FinanceContent() {
                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                       <span className="font-extrabold text-lg text-gray-900">${Number(c.amount).toLocaleString()}</span>
+                                       <span className="font-extrabold text-lg text-gray-900">৳ {Number(c.amount).toLocaleString()}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border

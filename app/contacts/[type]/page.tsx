@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { handleSupabaseError } from '@/lib/supabase-utils';
-import { Plus, Trash2, Pencil, Image as ImageIcon, MapPin, Mail, Building2, UserCircle2, X, Phone, MessageSquare, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Pencil, Image as ImageIcon, MapPin, Mail, Building2, UserCircle2, X, Phone, MessageSquare, CreditCard, Eye } from 'lucide-react';
 
 interface Personnel {
   id?: string;
@@ -31,6 +31,7 @@ export default function ContactsTypePage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingContact, setViewingContact] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Form State
@@ -605,6 +606,9 @@ export default function ContactsTypePage() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-1">
+                    <button onClick={() => setViewingContact(contact)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View Profile">
+                      <Eye className="w-4 h-4" />
+                    </button>
                     <button onClick={() => handleEdit(contact)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit">
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -625,6 +629,153 @@ export default function ContactsTypePage() {
           </tbody>
         </table>
       </div>
+
+      {/* View Profile Modal */}
+      {viewingContact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 w-full">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+            <div className={`h-32 bg-gradient-to-r ${viewingContact.type === 'customer' ? 'from-emerald-500 to-teal-600' : viewingContact.type === 'supplier' ? 'from-blue-600 to-indigo-600' : 'from-purple-500 to-pink-600'} relative shrink-0`}>
+               <button onClick={() => setViewingContact(null)} className="absolute top-4 right-4 text-white hover:text-red-300 bg-black/20 hover:bg-black/30 p-1.5 rounded-full transition-colors backdrop-blur-sm z-10"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-8 pb-8 pt-0 relative flex-1">
+               <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-end -mt-16 mb-6">
+                 <div className="w-32 h-32 rounded-3xl bg-white p-1.5 shadow-xl shrink-0">
+                    <div className="w-full h-full rounded-2xl bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-100">
+                       {viewingContact.photo_url ? (
+                         <img src={viewingContact.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                       ) : (
+                         <UserCircle2 className="w-16 h-16 text-gray-300" />
+                       )}
+                    </div>
+                 </div>
+                 <div className="flex-1 pb-2">
+                    <h3 className="text-3xl font-extrabold text-gray-900">{viewingContact.name}</h3>
+                    <div className="flex flex-wrap items-center gap-3 mt-3">
+                       {viewingContact.customer_code && <span className="text-sm font-mono font-bold text-gray-700 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">{viewingContact.customer_code}</span>}
+                       {viewingContact.shop_name && <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-4 py-1.5 rounded-full border border-indigo-100 flex items-center gap-1.5"><Building2 className="w-4 h-4" /> {viewingContact.shop_name}</span>}
+                       <span className="text-sm font-bold text-gray-600 bg-white px-4 py-1.5 rounded-full border border-gray-200 shadow-sm capitalize">{viewingContact.type}</span>
+                    </div>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Column (Details & Bank) */}
+                  <div className="space-y-6">
+                     <div className="bg-white border border-gray-200 p-6 rounded-3xl shadow-sm">
+                        <h4 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider mb-5 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500" /> Contact Info</h4>
+                        <div className="space-y-4">
+                           {viewingContact.phone_numbers?.length > 0 ? viewingContact.phone_numbers.map((pn: any, i: number) => (
+                              <div key={i} className="flex items-center gap-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                                <div className="w-10 h-10 rounded-full bg-white text-indigo-500 flex items-center justify-center shrink-0 shadow-sm border border-gray-100"><Phone className="w-4 h-4"/></div>
+                                <div className="flex-1">
+                                   <p className="font-extrabold text-gray-900">{pn.number}</p>
+                                   <div className="flex gap-2 mt-1">
+                                     {pn.is_whatsapp && <span className="text-[10px] uppercase font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-md">WhatsApp</span>}
+                                     {pn.is_imo && <span className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-md">imo</span>}
+                                     {pn.is_telegram && <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md">Telegram</span>}
+                                   </div>
+                                </div>
+                              </div>
+                           )) : (
+                              <>
+                                 {viewingContact.phone && <div className="flex items-center gap-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100"><div className="w-10 h-10 rounded-full bg-white text-indigo-500 flex items-center justify-center shrink-0 shadow-sm border border-gray-100"><Phone className="w-4 h-4"/></div><p className="font-extrabold text-gray-900">{viewingContact.phone}</p></div>}
+                                 {viewingContact.whatsapp && <div className="flex items-center gap-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100"><div className="w-10 h-10 rounded-full bg-white text-green-500 flex items-center justify-center shrink-0 shadow-sm border border-gray-100"><MessageSquare className="w-4 h-4"/></div><p className="font-extrabold text-gray-900">{viewingContact.whatsapp}</p></div>}
+                              </>
+                           )}
+                           
+                           {viewingContact.email && (
+                              <div className="flex items-center gap-4 bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm">
+                                <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center shrink-0 border border-orange-100"><Mail className="w-4 h-4"/></div>
+                                <div>
+                                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-0.5">Email Address</p>
+                                   <p className="font-bold text-gray-900 break-all">{viewingContact.email}</p>
+                                </div>
+                              </div>
+                           )}
+                           {viewingContact.address && (
+                              <div className="flex items-start gap-4 bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm">
+                                <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center shrink-0 border border-rose-100"><MapPin className="w-4 h-4"/></div>
+                                <div className="flex-1 pt-0.5">
+                                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Physical Address</p>
+                                   <p className="font-semibold text-gray-800 leading-relaxed">{viewingContact.address}</p>
+                                </div>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {viewingContact.bank_details && viewingContact.bank_details.length > 0 && viewingContact.bank_details[0].bank_name !== '' && (
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-6 rounded-3xl shadow-sm">
+                           <h4 className="text-sm font-extrabold text-blue-900 uppercase tracking-wider mb-5 flex items-center gap-2"><CreditCard className="w-4 h-4" /> Bank Accounts</h4>
+                           <div className="space-y-4">
+                              {viewingContact.bank_details.map((b: any, i: number) => (
+                                 <div key={i} className="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden group hover:border-blue-300 transition-colors">
+                                    <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-bl-full -mr-8 -mt-8 opacity-60 group-hover:scale-110 transition-transform"></div>
+                                    <p className="font-extrabold text-blue-900 text-lg">{b.bank_name}</p>
+                                    <p className="text-xs font-bold text-gray-500 mt-2 uppercase tracking-wide">A/C: <span className="text-gray-900 normal-case text-sm">{b.account_name}</span></p>
+                                    <p className="text-base font-mono font-extrabold text-gray-800 mt-1">{b.account_number}</p>
+                                    {b.branch && <p className="text-sm font-medium text-gray-500 mt-2 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {b.branch} Branch</p>}
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  {/* Right Column (Personnel) */}
+                  <div className="space-y-6">
+                     <div className="bg-white border border-gray-200 p-6 rounded-3xl shadow-sm h-full max-h-[800px] overflow-y-auto">
+                        <h4 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider mb-5 flex items-center gap-2"><UserCircle2 className="w-5 h-5 text-indigo-500" /> Linked Personnel / Employees</h4>
+                        {viewingContact.contact_employees?.length > 0 ? (
+                           <div className="space-y-4">
+                              {viewingContact.contact_employees.map((emp: any, idx: number) => (
+                                 <div key={idx} className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4">
+                                    <div className="flex items-center gap-4">
+                                       <div className="w-12 h-12 rounded-full bg-white border border-gray-200 overflow-hidden shrink-0 shadow-sm p-0.5">
+                                          <div className="w-full h-full rounded-full overflow-hidden bg-gray-100">
+                                             {emp.photo_url ? <img src={emp.photo_url} alt="Emp" className="w-full h-full object-cover" /> : <UserCircle2 className="w-full h-full text-gray-300" />}
+                                          </div>
+                                       </div>
+                                       <div>
+                                          <p className="font-extrabold text-gray-900 text-base">{emp.name}</p>
+                                          <p className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md inline-block mt-1 border border-indigo-100 uppercase tracking-wide">{emp.position}</p>
+                                       </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-200/60">
+                                       {(() => {
+                                          let parsedPhone = [{ number: emp.phone || '', is_whatsapp: false, is_imo: false, is_telegram: false }];
+                                          if (emp.phone && emp.phone.startsWith('[')) {
+                                            try { parsedPhone = JSON.parse(emp.phone); } catch(e){}
+                                          }
+                                          return parsedPhone.map((pn: any, i: number) => (
+                                             <div key={i} className="flex justify-between items-center bg-white rounded-xl p-2.5 mb-2 border border-gray-200 shadow-sm">
+                                                <span className="font-extrabold text-gray-800 text-sm flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-gray-400" /> {pn.number}</span>
+                                                <div className="flex gap-1.5">
+                                                  {pn.is_whatsapp && <span className="text-[10px] font-extrabold text-green-600 bg-green-50 px-1.5 py-0.5 rounded uppercase">WA</span>}
+                                                  {pn.is_imo && <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">imo</span>}
+                                                  {pn.is_telegram && <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase">TG</span>}
+                                                </div>
+                                             </div>
+                                          ));
+                                       })()}
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        ) : (
+                           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
+                              <UserCircle2 className="w-14 h-14 text-gray-300 mb-3" />
+                              <p className="text-gray-600 font-extrabold text-sm">No linked personnel</p>
+                              <p className="text-xs text-gray-400 mt-1 max-w-[200px]">This contact currently has no individual employees listed.</p>
+                           </div>
+                        )}
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

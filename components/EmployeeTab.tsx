@@ -519,7 +519,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-bold text-gray-900">
-                        ${Number(e.salary || 0).toLocaleString()} <span className="text-xs font-normal text-gray-500">/mo</span>
+                        <span className="text-base font-bold mr-0.5">৳</span>{Number(e.salary || 0).toLocaleString()} <span className="text-xs font-normal text-gray-500">/mo</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -626,7 +626,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                   </div>
                   <div>
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Base Salary</p>
-                    <p className="font-semibold text-gray-900">${Number(viewingEmployee.salary || 0).toLocaleString()} <span className="text-xs font-normal text-gray-500">/ month</span></p>
+                    <p className="font-semibold text-gray-900"><span className="text-lg font-bold mr-0.5">৳</span>{Number(viewingEmployee.salary || 0).toLocaleString()} <span className="text-xs font-normal text-gray-500">/ month</span></p>
                   </div>
                 </div>
                 

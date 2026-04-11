@@ -77,13 +77,13 @@ function InvoicesContent() {
             setForm(prev => ({
                ...prev,
                contact_id: order.contact_id || '',
-               date:       order.date || prev.date,
-               items:      (order.items && order.items.length > 0)
+               date: order.date || prev.date,
+               items: (order.items && order.items.length > 0)
                   ? order.items.map((i: any) => ({
-                       product_id: i.product_id || '',
-                       quantity:   Number(i.quantity) || 1,
-                       price:      Number(i.price) || 0,
-                    }))
+                     product_id: i.product_id || '',
+                     quantity: Number(i.quantity) || 1,
+                     price: Number(i.price) || 0,
+                  }))
                   : prev.items,
             }));
             setShowBuilder(true);
@@ -419,7 +419,7 @@ function InvoicesContent() {
                                  <span className="font-bold text-indigo-900">{inv.contacts?.name || 'Unknown'}</span>
                                  {inv.contacts?.shop_name && <span className="block text-xs text-indigo-500">{inv.contacts.shop_name}</span>}
                               </td>
-                              <td className="px-6 py-4 font-extrabold text-slate-900">${Number(inv.total).toLocaleString()}</td>
+                              <td className="px-6 py-4 font-extrabold text-slate-900">৳ {Number(inv.total).toLocaleString()}</td>
                               <td className="px-6 py-4">
                                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border
                            ${inv.payment_status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' :
@@ -427,7 +427,7 @@ function InvoicesContent() {
                                           'bg-red-50 text-red-700 border-red-200'}`}>
                                     {inv.payment_status}
                                  </span>
-                                 {Number(inv.due_amount) > 0 && <div className="text-[10px] text-red-500 font-bold mt-1">Due: ${inv.due_amount}</div>}
+                                 {Number(inv.due_amount) > 0 && <div className="text-[10px] text-red-500 font-bold mt-1">Due: ৳ {inv.due_amount}</div>}
                               </td>
                               <td className="px-6 py-4 text-right">
                                  <button onClick={() => handleDelete(inv.id)} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"><Trash2 className="w-5 h-5" /></button>
@@ -512,7 +512,7 @@ function InvoicesContent() {
                            <div className="col-span-10 md:col-span-2">
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Subtotal</label>
                               <div className="w-full bg-slate-100 rounded-lg p-2.5 font-mono font-bold text-slate-800 text-center">
-                                 ${(Number(item.quantity) * Number(item.price)).toFixed(2)}
+                                 <span style={{ fontFamily: "sans-serif" }} className="font-extrabold pr-[2px]">৳</span> {(Number(item.quantity) * Number(item.price)).toFixed(2)}
                               </div>
                            </div>
                            <div className="col-span-2 md:col-span-1 flex justify-end">
@@ -531,7 +531,7 @@ function InvoicesContent() {
                         <div className="w-full max-w-sm space-y-3">
                            <div className="flex justify-between items-center text-sm font-bold text-slate-600">
                               <span>Subtotal:</span>
-                              <span className="font-mono text-base">${subtotal.toFixed(2)}</span>
+                              <span className="font-mono text-base">৳ {subtotal.toFixed(2)}</span>
                            </div>
                            <div className="flex flex-col items-end gap-2 w-full pt-2">
                               <label className="flex items-center cursor-pointer justify-end gap-2 text-sm font-bold text-slate-800">
@@ -555,7 +555,7 @@ function InvoicesContent() {
                            </div>
                            <div className="flex justify-between items-center text-xl font-extrabold text-slate-900 pt-3 border-t border-slate-200 mt-2">
                               <span>Total:</span>
-                              <span className="font-mono text-2xl text-indigo-700">${total.toFixed(2)}</span>
+                              <span className="font-mono text-2xl text-indigo-700">৳ {total.toFixed(2)}</span>
                            </div>
                         </div>
                      </div>
@@ -581,10 +581,10 @@ function InvoicesContent() {
                                     {activeTab === 'buy' ? 'Paid Upfront Amount' : activeTab === 'sell' ? 'Received Amount' : 'Refund Amount'}
                                  </label>
                                  <div className="relative">
-                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${activeTab === 'return' ? 'text-orange-600' : 'text-blue-600'}`}>$</span>
+                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${activeTab === 'return' ? 'text-orange-600' : 'text-blue-600'}`}><span style={{ fontFamily: "sans-serif" }} className="font-extrabold pr-[2px]">৳</span></span>
                                     <input type="number" min="0" max={total} value={form.payment_amount === 0 && !hasPayment ? '' : form.payment_amount} onChange={e => handlePaymentAmountChange(e.target.value)} className={`w-full pl-8 pr-4 py-3.5 border rounded-xl text-2xl font-extrabold outline-none focus:ring-2 shadow-inner bg-white ${activeTab === 'return' ? 'border-orange-200 text-orange-900 focus:ring-orange-500' : 'border-blue-200 text-blue-900 focus:ring-blue-500'}`} />
                                  </div>
-                                 {due > 0 && <p className="text-xs font-bold text-red-500 mt-2 text-right">Remaining Due: ${due.toFixed(2)}</p>}
+                                 {due > 0 && <p className="text-xs font-bold text-red-500 mt-2 text-right">Remaining Due: ৳ {due.toFixed(2)}</p>}
                               </div>
 
                               <div className="animate-in fade-in slide-in-from-top-2 border-t pt-5 border-opacity-50 border-inherit">
@@ -592,12 +592,12 @@ function InvoicesContent() {
                                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 bg-white p-3 rounded-2xl border shadow-inner">
                                     {['cash', 'bikash', 'nagad', 'rocket', 'upay', 'bank_transfer', 'cheque'].map(m => (
                                        <label key={m} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${form.payment_method === m ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-500 shadow-sm' : 'border-gray-100 hover:bg-gray-50'}`}>
-                                          <input type="radio" value={m} checked={form.payment_method === m} onChange={() => setForm({...form, payment_method: m as PaymentMethod})} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
+                                          <input type="radio" value={m} checked={form.payment_method === m} onChange={() => setForm({ ...form, payment_method: m as PaymentMethod })} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
                                           <span className={`font-bold text-sm uppercase tracking-wide ${form.payment_method === m ? 'text-indigo-900' : 'text-gray-600'}`}>{m.replace('_', ' ')}</span>
                                        </label>
                                     ))}
                                  </div>
-                                 
+
                                  <div className="mt-4">
                                     {renderPaymentDetails()}
                                  </div>
