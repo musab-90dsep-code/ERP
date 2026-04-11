@@ -71,14 +71,15 @@ function ProcessingContent() {
     // 2. Fetch Products
     const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('id, name, unit, stock_quantity, category');
+      .select('id, name, unit, stock_quantity, category, processing_price_auto, processing_price_manual')
+      .eq('use_for_processing', true);
     if (prodErr) console.error(prodErr);
     else setProducts(prodData || []);
 
     // 3. Fetch Employees
     const { data: empData, error: empErr } = await supabase
       .from('employees')
-      .select('id, name')
+      .select('id, name, is_authorizer')
       .order('name');
     if (empErr) console.error(empErr);
     else setEmployees(empData || []);
@@ -88,7 +89,7 @@ function ProcessingContent() {
     const { data, error } = await supabase
       .from('processing_orders')
       .select(`
-        id, created_at, type, quantity, date, process_type, note, photo_urls,
+        id, created_at, type, quantity, date, process_type, note, photo_urls, unit_cost, total_cost,
         contacts ( name, shop_name ),
         products ( name, unit )
       `)
@@ -150,7 +151,9 @@ function ProcessingContent() {
         }
       }
 
-      // 4. Log into processing_orders
+      const unitCost = processType === 'auto' ? Number(selectedProductObj?.processing_price_auto || 0) : processType === 'manual' ? Number(selectedProductObj?.processing_price_manual || 0) : 0;
+      const totalCost = numericQuantity * unitCost;
+
       const payload = {
         type: activeTab,
         memo_no: memoNo,
@@ -162,6 +165,8 @@ function ProcessingContent() {
         received_by: receivedBy,
         process_type: processType || null,
         note: note || null,
+        unit_cost: unitCost,
+        total_cost: totalCost,
         photo_urls: uploadedUrls.length > 0 ? uploadedUrls : undefined
       };
 
@@ -299,6 +304,19 @@ function ProcessingContent() {
                   </select>
                 </div>
                 
+                {processType && selectedProductObj && (
+                  <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex justify-between items-center transition-all animate-in fade-in">
+                     <div>
+                       <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">Unit Processing Cost</span>
+                       <span className="text-lg font-extrabold text-indigo-900">${(processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0)).toFixed(2)}</span>
+                     </div>
+                     <div className="text-right">
+                       <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">Total Est. Cost</span>
+                       <span className="text-xl font-extrabold text-indigo-900">${(Number(quantity || 0) * (processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0))).toFixed(2)}</span>
+                     </div>
+                  </div>
+                )}
+                
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><PenTool className="w-4 h-4 text-gray-400" /> Note (Optional)</label>
                   <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Add any special instructions or notes..." className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-medium text-sm text-gray-800 bg-gray-50 hover:bg-white resize-none" />
@@ -331,7 +349,7 @@ function ProcessingContent() {
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-2"><PenTool className="w-4 h-4 text-indigo-500" /> Authorized Signature</label>
                   <select required value={authorizedSignature} onChange={e => setAuthorizedSignature(e.target.value)} className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-bold text-sm text-gray-800 bg-gray-50 hover:bg-white appearance-none">
                      <option value="" disabled>-- Select Employee --</option>
-                     {employees.map(emp => (
+                     {employees.filter(emp => emp.is_authorizer).map(emp => (
                         <option key={`auth-${emp.id}`} value={emp.name}>{emp.name}</option>
                      ))}
                   </select>
@@ -398,7 +416,7 @@ function ProcessingContent() {
                                 </div>
                              </td>
                              <td className="px-6 py-4 text-sm max-w-[200px]">
-                                {log.process_type && <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded capitalize mb-1 mr-1 border border-slate-200">{log.process_type}</span>}
+                                {log.process_type && <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded capitalize mb-1 mr-1 border border-slate-200">{log.process_type} {log.total_cost ? `($${Number(log.total_cost).toLocaleString()})` : ''}</span>}
                                 {log.note && <p className="text-xs text-gray-500 truncate mb-1" title={log.note}>{log.note}</p>}
                                 
                                 {log.photo_urls && log.photo_urls.length > 0 && (

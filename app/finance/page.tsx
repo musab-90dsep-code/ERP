@@ -25,14 +25,6 @@ function FinanceContent() {
 
    const generateMemoNo = () => `TRN-${Math.floor(100000 + Math.random() * 900000)}`;
 
-   const [transferData, setTransferData] = useState({
-      contact_id: '',
-      transfer_date: new Date().toISOString().split('T')[0],
-      memo_no: generateMemoNo(),
-      authorized_signature: '',
-      received_by: ''
-   });
-
    useEffect(() => {
       fetchChecks();
       fetchContacts();
@@ -40,7 +32,7 @@ function FinanceContent() {
    }, []);
 
    const fetchEmployees = async () => {
-      const { data } = await supabase.from('employees').select('id, name').order('name');
+      const { data } = await supabase.from('employees').select('id, name, is_authorizer').order('name');
       setEmployees(data ?? []);
    };
 
@@ -74,32 +66,6 @@ function FinanceContent() {
       }
    };
 
-   const handleTransferSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!selectedCheckId || !transferData.contact_id) {
-         alert("Please select a cheque to transfer!");
-         return;
-      }
-
-      const { error } = await supabase.from('checks').update({
-         status: 'transferred',
-         partner_id: transferData.contact_id,
-         transfer_memo_no: transferData.memo_no,
-         transfer_date: transferData.transfer_date,
-         transfer_auth_signature: transferData.authorized_signature,
-         transfer_received_by: transferData.received_by
-      }).eq('id', selectedCheckId);
-
-      if (!error) {
-         alert("Cheque successfully transferred!");
-         setTransferData({ ...transferData, memo_no: generateMemoNo(), contact_id: '', authorized_signature: '', received_by: '' });
-         setSelectedCheckId('');
-         fetchChecks();
-      } else {
-         alert('Error transferring check. Make sure your database supports this operation!');
-      }
-   };
-
    const handleDelete = async (table: string, id: string) => {
       if (!window.confirm('Are you sure you want to delete this record?')) return;
       await supabase.from(table).delete().eq('id', id);
@@ -121,9 +87,6 @@ function FinanceContent() {
       return diffDays <= 3; // Alert if within 3 days
    });
 
-   const pendingChecks = checks.filter(c => c.status === 'pending');
-   const transferredChecks = checks.filter(c => c.status === 'transferred');
-
    return (
       <div className="pb-10 font-sans animate-in fade-in duration-300">
          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-gradient-to-r from-teal-900 to-indigo-900 p-8 rounded-3xl text-white shadow-lg relative overflow-hidden mb-8">
@@ -133,16 +96,15 @@ function FinanceContent() {
                   <Landmark className="w-4 h-4" /> Finance Operations
                </p>
                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
-                  {tab === 'transfer' ? 'Cheque Transfer' : 'Cheque Management'}
+                  Cheque Management
                </h1>
                <p className="text-teal-100 max-w-xl text-sm md:text-base">
-                  {tab === 'transfer' ? 'Endorse and transfer checks to suppliers or processors.' : 'Track cheques, date alerts, and update statuses.'}
+                  Track cheques, date alerts, and update statuses.
                </p>
             </div>
          </div>
 
-         {tab === 'management' && (
-            <div className="space-y-6">
+         <div className="space-y-6">
                {/* CHEQUE ALERTS WIDGET */}
                {alertChecks.length > 0 && (
                   <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
@@ -321,143 +283,7 @@ function FinanceContent() {
                   </div>
                </div>
             </div>
-         )}
-
-         {tab === 'transfer' && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-               {/* TRANSFER FORM */}
-               <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-indigo-700 to-blue-700 text-white flex justify-between items-center relative overflow-hidden">
-                     <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-2xl pointer-events-none"></div>
-                     <h2 className="text-xl font-bold flex items-center gap-2 relative z-10">
-                        <ArrowRightLeft className="w-5 h-5" /> Endorse and Transfer Cheque
-                     </h2>
-                  </div>
-                  <div className="p-8">
-                     <p className="text-sm text-gray-600 mb-6 flex gap-3 bg-blue-50 border border-blue-100 p-4 rounded-xl items-center font-medium">
-                        <AlertCircle className="w-6 h-6 text-blue-500 shrink-0" />
-                        You are legally endorsing and transferring a pending cheque to a Supplier or Processor. Completing this action will lock the cheque status.
-                     </p>
-
-                     <form onSubmit={handleTransferSubmit} className="flex flex-col gap-6">
-                        {/* SELECT CHEQUE ROW */}
-                        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
-                           <label className="block text-sm font-bold text-gray-800 mb-2">Select Pending Cheque to Transfer</label>
-                           <select required value={selectedCheckId} onChange={e => setSelectedCheckId(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900 bg-white shadow-sm appearance-none cursor-pointer">
-                              <option value="" disabled>-- Select an Eligible Cheque --</option>
-                              {pendingChecks.map(c => (
-                                 <option key={c.id} value={c.id}>#{c.check_number} - {c.bank_name} - ${Number(c.amount).toLocaleString()}</option>
-                              ))}
-                           </select>
-                           {pendingChecks.length === 0 && (
-                              <p className="text-xs text-red-500 mt-2 font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3" /> No pending cheques found. Go to 'Cheque Management' to add one.</p>
-                           )}
-                        </div>
-
-                        <div className="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl shadow-inner">
-                           <span className="text-sm font-bold text-indigo-900 uppercase tracking-widest">Transfer Memo Ref</span>
-                           <span className="font-mono font-bold text-indigo-700 tracking-wider flex items-center gap-2 text-lg"><Ticket className="w-5 h-5" />{transferData.memo_no}</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <div className="md:col-span-2">
-                              <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2">
-                                 <Briefcase className="w-4 h-4 text-gray-400" /> Target Supplier / Processor
-                              </label>
-                              <select required value={transferData.contact_id} onChange={e => setTransferData({ ...transferData, contact_id: e.target.value })} className="w-full border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900 bg-gray-50 appearance-none">
-                                 <option value="" disabled>-- Choose Contact --</option>
-                                 {contacts.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name} {c.shop_name ? `(${c.shop_name})` : ''} - [{c.type}]</option>
-                                 ))}
-                              </select>
-                           </div>
-
-                           <div className="md:col-span-2">
-                              <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2">
-                                 <CalendarIcon className="w-4 h-4 text-gray-400" /> Date of Transfer
-                              </label>
-                              <input required type="date" value={transferData.transfer_date} onChange={e => setTransferData({ ...transferData, transfer_date: e.target.value })} className="w-full border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900 bg-gray-50" />
-                           </div>
-
-                           <div>
-                              <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><PenTool className="w-4 h-4 text-indigo-500" /> Authorized Signature</label>
-                              <select required value={transferData.authorized_signature} onChange={e => setTransferData({ ...transferData, authorized_signature: e.target.value })} className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold text-gray-800 bg-gray-50 hover:bg-white appearance-none">
-                                 <option value="" disabled>-- Select Employee --</option>
-                                 {employees.map(emp => (
-                                    <option key={`tauth-${emp.id}`} value={emp.name}>{emp.name}</option>
-                                 ))}
-                              </select>
-                           </div>
-
-                           <div>
-                              <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><UserCheck className="w-4 h-4 text-emerald-500" /> Received By</label>
-                              <select required value={transferData.received_by} onChange={e => setTransferData({ ...transferData, received_by: e.target.value })} className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold text-gray-800 bg-gray-50 hover:bg-white appearance-none">
-                                 <option value="" disabled>-- Select Employee --</option>
-                                 {employees.map(emp => (
-                                    <option key={`trec-${emp.id}`} value={emp.name}>{emp.name}</option>
-                                 ))}
-                              </select>
-                           </div>
-                        </div>
-
-                        <div className="pt-6 mt-2 border-t border-gray-100 flex justify-end">
-                           <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-lg disabled:opacity-50" disabled={pendingChecks.length === 0}>
-                              <CheckCircle2 className="w-6 h-6" /> Confirm Transfer
-                           </button>
-                        </div>
-                     </form>
-                  </div>
-               </div>
-
-               {/* TRANSFER HISTORY LIST */}
-               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mt-8">
-                  <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                     <h3 className="font-extrabold text-gray-800">Transfer History</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                     <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase">
-                           <tr>
-                              <th className="px-6 py-4">Memo No</th>
-                              <th className="px-6 py-4">Cheque Ref</th>
-                              <th className="px-6 py-4">Recipient</th>
-                              <th className="px-6 py-4">Transfer Date</th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                           {transferredChecks.map(c => {
-                              const partner = contacts.find(contact => contact.id === c.partner_id);
-                              return (
-                                 <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                       <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">{c.transfer_memo_no}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                       <div className="font-bold text-gray-900">#{c.check_number}</div>
-                                       <div className="text-sm font-semibold text-gray-500">{c.bank_name} - ${Number(c.amount).toLocaleString()}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                       <div className="font-bold text-gray-800">{partner?.name || 'Unknown Contact'}</div>
-                                       <div className="text-xs text-gray-500">{partner?.type}</div>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm font-bold text-gray-700">
-                                       {new Date(c.transfer_date).toLocaleDateString()}
-                                    </td>
-                                 </tr>
-                              );
-                           })}
-                           {transferredChecks.length === 0 && (
-                              <tr>
-                                 <td colSpan={4} className="py-8 text-center text-gray-500 font-medium">No transfer history found.</td>
-                              </tr>
-                           )}
-                        </tbody>
-                     </table>
-                  </div>
-               </div>
-            </div>
-         )}
-      </div>
+         </div>
    );
 }
 

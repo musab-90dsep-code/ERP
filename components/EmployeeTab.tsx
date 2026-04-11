@@ -25,7 +25,8 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
     name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '',
     id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [] as string[],
     phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }],
-    daily_allowance: 0, monthly_allowance: 0
+    daily_allowance: 0, monthly_allowance: 0,
+    is_authorizer: false
   });
 
   const parsePhones = (phoneStr: string, whatsappStr: string = '') => {
@@ -137,7 +138,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
   const resetEmpForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0 });
+    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0, is_authorizer: false });
     setProfilePreview(null);
     setProfileImageFile(null);
     setIdPhotoFiles([]);
@@ -167,7 +168,8 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
       id_photo_urls: emp.id_photo_urls || [],
       phone_numbers: parsedPhone,
       daily_allowance: emp.daily_allowance || 0,
-      monthly_allowance: emp.monthly_allowance || 0
+      monthly_allowance: emp.monthly_allowance || 0,
+      is_authorizer: emp.is_authorizer || false
     });
     setProfilePreview(emp.profile_image_url || null);
     setIdPhotoPreviews(emp.id_photo_urls || []);
@@ -364,6 +366,15 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input type="number" placeholder="0.00" value={empData.monthly_allowance || ''} onChange={e => setEmpData({ ...empData, monthly_allowance: Number(e.target.value) })} className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-green-50/30" />
                       </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg bg-gray-50 hover:bg-white transition-colors mb-2">
+                        <input type="checkbox" checked={empData.is_authorizer} onChange={e => setEmpData({ ...empData, is_authorizer: e.target.checked })} className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-gray-800">Assign as Authorizer</span>
+                          <span className="text-xs text-gray-500">Check this if the employee should appear in signature dropdowns.</span>
+                        </div>
+                      </label>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-bold text-gray-700 mb-1.5 pl-1">Address</label>

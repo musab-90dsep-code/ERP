@@ -14,14 +14,14 @@ export default function TransactionTab({ employees, transactions, attendance = [
   const [showForm, setShowForm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [transData, setTransData] = useState({ employee_id: '', date: new Date().toISOString().split('T')[0], type: 'salary', amount: 0, description: '' });
+  const [transData, setTransData] = useState({ employee_id: '', date: new Date().toISOString().split('T')[0], type: 'salary', amount: 0, note: '' });
 
   const handleTransSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from('employee_transactions').insert({ ...transData });
     if (!error) { 
       setShowForm(false); 
-      setTransData({ employee_id: '', date: new Date().toISOString().split('T')[0], type: 'salary', amount: 0, description: '' }); 
+      setTransData({ employee_id: '', date: new Date().toISOString().split('T')[0], type: 'salary', amount: 0, note: '' }); 
       fetchTransactions(); 
     }
   };
@@ -55,7 +55,7 @@ export default function TransactionTab({ employees, transactions, attendance = [
           date: currentDate,
           type: 'allowance',
           amount: eligibleDays * emp.daily_allowance,
-          description: `Daily Allowance (${eligibleDays} days present)`
+          note: `Daily Allowance (${eligibleDays} days present)`
         });
       }
     }
@@ -87,7 +87,7 @@ export default function TransactionTab({ employees, transactions, attendance = [
         date: currentDate,
         type: 'allowance',
         amount: emp.monthly_allowance,
-        description: `Monthly Allowance`
+        note: `Monthly Allowance`
       });
     }
 
@@ -224,7 +224,7 @@ export default function TransactionTab({ employees, transactions, attendance = [
                 
                 <div>
                   <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Description / Memo</label>
-                  <textarea rows={2} value={transData.description} onChange={e => setTransData({ ...transData, description: e.target.value })} className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none font-medium resize-none" placeholder="E.g. March 2026 Salary" />
+                  <textarea rows={2} value={transData.note} onChange={e => setTransData({ ...transData, note: e.target.value })} className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none font-medium resize-none" placeholder="E.g. March 2026 Salary" />
                 </div>
               </div>
               
@@ -303,7 +303,7 @@ export default function TransactionTab({ employees, transactions, attendance = [
                        <span className="font-black text-gray-900">${Number(t.amount || 0).toLocaleString()}</span>
                      </td>
                      <td className="px-6 py-4">
-                       <span className="text-sm font-medium text-gray-500">{t.description || <span className="italic opacity-50">N/A</span>}</span>
+                       <span className="text-sm font-medium text-gray-500">{t.note || <span className="italic opacity-50">N/A</span>}</span>
                      </td>
                      <td className="px-6 py-4 text-right">
                        <button onClick={() => { if(window.confirm('Delete this payment record?')) handleDelete('employee_transactions', t.id); }} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100">

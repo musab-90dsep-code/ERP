@@ -39,13 +39,13 @@ function InvoicesContent() {
    const [form, setForm] = useState({
       contact_id: '',
       date: new Date().toISOString().split('T')[0],
-      items: [{ product_id: '', quantity: 1, price: 0 }],
-      discount: 0,
+      items: [{ product_id: '', quantity: 1, price: '' as any }],
+      discount: '' as any,
       discount_type: 'amount',
       discount_method: '',
 
       // Payment
-      payment_amount: 0,
+      payment_amount: '' as any,
       payment_method: 'cash' as PaymentMethod,
       cheque_type: 'own' as ChequeType, // For Paid/Buy invoices
       payment_details: {} as any,
@@ -80,7 +80,7 @@ function InvoicesContent() {
       setContacts(cData || []);
 
       // Fetch employees
-      const { data: eData } = await supabase.from('employees').select('id, name, role');
+      const { data: eData } = await supabase.from('employees').select('id, name, role, is_authorizer');
       setEmployees(eData || []);
    };
 
@@ -93,7 +93,7 @@ function InvoicesContent() {
       setInvoices(data || []);
    };
 
-   const handleAddItem = () => setForm({ ...form, items: [...form.items, { product_id: '', quantity: 1, price: 0 }] });
+   const handleAddItem = () => setForm({ ...form, items: [...form.items, { product_id: '', quantity: 1, price: '' as any }] });
 
    const handleRemoveItem = (index: number) => {
       const newItems = [...form.items];
@@ -120,6 +120,10 @@ function InvoicesContent() {
 
    // Safe payment amount handler to prevent over-paying
    const handlePaymentAmountChange = (val: string) => {
+      if (val === '') {
+         setForm({ ...form, payment_amount: '' });
+         return;
+      }
       let amt = Number(val);
       if (amt > total) amt = total;
       if (amt < 0) amt = 0;
@@ -232,8 +236,8 @@ function InvoicesContent() {
       setHasPayment(false);
       setHasDiscount(false);
       setForm({
-         contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: 1, price: 0 }], discount: 0, discount_type: 'amount', discount_method: '',
-         payment_amount: 0, payment_method: 'cash', cheque_type: 'own', payment_details: {}, authorized_signature: '', received_by: ''
+         contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: 1, price: '' as any }], discount: '' as any, discount_type: 'amount', discount_method: '',
+         payment_amount: '' as any, payment_method: 'cash', cheque_type: 'own', payment_details: {}, authorized_signature: '', received_by: ''
       });
    };
 
@@ -469,12 +473,12 @@ function InvoicesContent() {
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Product</label>
                               <select required value={item.product_id} onChange={e => handleItemChange(index, 'product_id', e.target.value)} className="w-full border border-gray-200 rounded-lg p-2.5 font-bold text-gray-900 bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500">
                                  <option value="" disabled>Select Product...</option>
-                                 {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock_quantity})</option>)}
+                                 {products.filter(p => activeTab === 'sell' ? p.category === 'finished-goods' : p.category === 'raw-materials').map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock_quantity})</option>)}
                               </select>
                            </div>
                            <div className="col-span-6 md:col-span-2">
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Price</label>
-                              <input type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value)} className="w-full border border-gray-200 rounded-lg p-2.5 font-bold text-gray-900 bg-gray-50" />
+                              <input type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value === '' ? '' : Number(e.target.value))} className="w-full border border-gray-200 rounded-lg p-2.5 font-bold text-gray-900 bg-gray-50" />
                            </div>
                            <div className="col-span-6 md:col-span-2">
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
@@ -520,7 +524,7 @@ function InvoicesContent() {
                                        <option value="amount">Taka (৳)</option>
                                        <option value="percentage">Percentage (%)</option>
                                     </select>
-                                    <input type="number" placeholder={form.discount_type === 'percentage' ? '%' : 'Amt'} value={form.discount || ''} onChange={e => setForm({ ...form, discount: Number(e.target.value) })} className="w-[100px] text-right border border-slate-300 rounded p-1.5 font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+                                    <input type="number" placeholder={form.discount_type === 'percentage' ? '%' : 'Amt'} value={form.discount} onChange={e => setForm({ ...form, discount: e.target.value === '' ? '' : Number(e.target.value) })} className="w-[100px] text-right border border-slate-300 rounded p-1.5 font-mono outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
                                  </div>
                               )}
                            </div>
@@ -553,7 +557,7 @@ function InvoicesContent() {
                                  </label>
                                  <div className="relative">
                                     <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-bold ${activeTab === 'return' ? 'text-orange-600' : 'text-blue-600'}`}>$</span>
-                                    <input type="number" min="0" max={total} value={form.payment_amount} onChange={e => handlePaymentAmountChange(e.target.value)} className={`w-full pl-8 pr-4 py-3.5 border rounded-xl text-2xl font-extrabold outline-none focus:ring-2 shadow-inner bg-white ${activeTab === 'return' ? 'border-orange-200 text-orange-900 focus:ring-orange-500' : 'border-blue-200 text-blue-900 focus:ring-blue-500'}`} />
+                                    <input type="number" min="0" max={total} value={form.payment_amount === 0 && !hasPayment ? '' : form.payment_amount} onChange={e => handlePaymentAmountChange(e.target.value)} className={`w-full pl-8 pr-4 py-3.5 border rounded-xl text-2xl font-extrabold outline-none focus:ring-2 shadow-inner bg-white ${activeTab === 'return' ? 'border-orange-200 text-orange-900 focus:ring-orange-500' : 'border-blue-200 text-blue-900 focus:ring-blue-500'}`} />
                                  </div>
                                  {due > 0 && <p className="text-xs font-bold text-red-500 mt-2 text-right">Remaining Due: ${due.toFixed(2)}</p>}
                               </div>
@@ -589,7 +593,7 @@ function InvoicesContent() {
                                  </div>
                                  <select required value={form.authorized_signature} onChange={e => setForm({ ...form, authorized_signature: e.target.value })} className="w-full border border-gray-200 rounded-xl p-3 font-bold text-gray-900 bg-white outline-none focus:ring-2 focus:ring-slate-800">
                                     <option value="" disabled>-- Select Employee --</option>
-                                    {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name} {emp.role ? `(${emp.role})` : ''}</option>)}
+                                    {employees.filter(emp => emp.is_authorizer).map(emp => <option key={emp.id} value={emp.name}>{emp.name} {emp.role ? `(${emp.role})` : ''}</option>)}
                                  </select>
                               </div>
                               <div>

@@ -9,6 +9,7 @@ import {
   ArrowRightLeft, Building, Factory, Menu, X, Download, CheckCircle, Wallet, ShoppingCart
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -58,6 +59,13 @@ const navItems = [
     ]
   },
   {
+    name: 'Daily Expenses', basePath: '/expenses', icon: ReceiptText,
+    subItems: [
+      { name: 'Make a Receipt', href: '/expenses?tab=make' },
+      { name: 'Pay for Receipt', href: '/expenses?tab=pay' },
+    ]
+  },
+  {
     name: 'Payments', basePath: '/payments', icon: CreditCard,
     subItems: [
       { name: 'Received', href: '/payments?tab=in' },
@@ -68,11 +76,7 @@ const navItems = [
     name: 'Accounts', href: '/accounts', icon: Wallet
   },
   {
-    name: 'Finance', basePath: '/finance', icon: Landmark,
-    subItems: [
-      { name: 'Cheque Management', href: '/finance?tab=management' },
-      { name: 'Cheque Transfer', href: '/finance?tab=transfer' }
-    ]
+    name: 'Finance', href: '/finance', icon: Landmark
   },
 ];
 
@@ -91,18 +95,20 @@ export function Sidebar() {
     Employees:  pathname.startsWith('/employees'),
     Orders:     pathname.startsWith('/orders'),
     Processing: pathname.startsWith('/processing'),
+    Expenses:   pathname.startsWith('/expenses'),
     Payments:   pathname.startsWith('/payments'),
   });
+
+  // Use the mobile hook instead of manual resize listeners
+  const isMobile = useIsMobile();
 
   // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false); }, [pathname, searchParams]);
 
   // Close on resize to desktop
   useEffect(() => {
-    const fn = () => { if (window.innerWidth >= 1024) setMobileOpen(false); };
-    window.addEventListener('resize', fn);
-    return () => window.removeEventListener('resize', fn);
-  }, []);
+    if (!isMobile) setMobileOpen(false);
+  }, [isMobile]);
 
   // ── PWA Install prompt capture ──
   useEffect(() => {

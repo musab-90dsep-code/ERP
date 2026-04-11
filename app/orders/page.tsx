@@ -64,8 +64,8 @@ function OrdersContent() {
   };
   const [formData,  setFormData]  = useState(emptyForm);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [itemForm,   setItemForm]   = useState({
-    product_id: '', product_name: '', quantity: 1, unit: '', unit_price: 0,
+  const [itemForm,   setItemForm]   = useState<any>({
+    product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '',
   });
 
   // ── fetch ──
@@ -111,7 +111,7 @@ function OrdersContent() {
     if (!itemForm.product_id || itemForm.quantity <= 0) return;
     const subtotal = itemForm.quantity * itemForm.unit_price;
     setOrderItems(prev => [...prev, { ...itemForm, subtotal }]);
-    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: 0 });
+    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '' });
   };
 
   const removeItem = (idx: number) =>
@@ -123,7 +123,7 @@ function OrdersContent() {
   const selectProduct = (id: string) => {
     const p = products.find(x => x.id === id);
     if (!p) return;
-    setItemForm(prev => ({
+    setItemForm((prev: any) => ({
       ...prev,
       product_id:   p.id,
       product_name: p.name,
@@ -173,7 +173,7 @@ function OrdersContent() {
     setEditingId(null);
     setFormData(emptyForm);
     setOrderItems([]);
-    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: 0 });
+    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '' });
   };
 
   const handleEdit = (order: Order) => {
@@ -303,7 +303,7 @@ function OrdersContent() {
                 <input
                   type="number" min="0" step="0.01"
                   value={itemForm.unit_price}
-                  onChange={e => setItemForm({ ...itemForm, unit_price: Number(e.target.value) })}
+                  onChange={e => setItemForm({ ...itemForm, unit_price: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full border border-gray-200 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>

@@ -26,7 +26,8 @@ function PaymentsContent() {
   
   const [payments, setPayments] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
-  const [availableCheques, setAvailableCheques] = useState<any[]>([]);
+  const [internalAccounts, setInternalAccounts] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   
   const generateMemoNo = () => `MEMO-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -44,10 +45,9 @@ function PaymentsContent() {
       account_number: '',
       branch: '',
       datetime: '',
-      cheque_type: 'own' as 'own' | 'customer',
       cheque_number: '',
       cheque_date: '',
-      selected_customer_cheque_id: ''
+      internal_account_id: ''
     },
     authorized_signature: '',
     received_by: ''
@@ -69,10 +69,19 @@ function PaymentsContent() {
   useEffect(() => {
     fetchPayments();
     fetchContacts();
-    if (activeTab === 'out') {
-       fetchAvailableCustomerCheques();
-    }
+    fetchInternalAccounts();
+    fetchEmployees();
   }, [activeTab]);
+
+  const fetchInternalAccounts = async () => {
+    const { data } = await supabase.from('internal_accounts').select('*').order('provider_name');
+    setInternalAccounts(data || []);
+  };
+
+  const fetchEmployees = async () => {
+    const { data } = await supabase.from('employees').select('id, name, is_authorizer').order('name');
+    setEmployees(data || []);
+  };
 
   const handleTabChange = (tab: PaymentType) => {
     setActiveTab(tab);
@@ -94,13 +103,6 @@ function PaymentsContent() {
       .eq('type', activeTab)
       .order('created_at', { ascending: false });
     setPayments(data || []);
-  };
-
-
-  const fetchAvailableCustomerCheques = async () => {
-     // Fetch received customer cheques that haven't bounced or transferred yet
-     const { data } = await supabase.from('checks').select('id, check_number, bank_name, amount').eq('type', 'received').eq('status', 'pending');
-     setAvailableCheques(data || []);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,31 +147,22 @@ function PaymentsContent() {
                partner_id: form.contact_id
             }]);
          } else if (activeTab === 'out') { // Paid Cheque
-            if (form.details.cheque_type === 'own') {
-               await supabase.from('checks').insert([{
-                  type: 'issued',
-                  check_number: form.details.cheque_number,
-                  bank_name: form.details.bank_name,
-                  amount: Number(form.amount),
-                  issue_date: form.date,
-                  cash_date: form.details.cheque_date,
-                  status: 'pending',
-                  partner_id: form.contact_id
-               }]);
-            } else if (form.details.cheque_type === 'customer' && form.details.selected_customer_cheque_id) {
-               // ENDORSE EXISTING CUSTOMER CHEQUE
-               await supabase.from('checks').update({
-                  status: 'transferred',
-                  partner_id: form.contact_id
-               }).eq('id', form.details.selected_customer_cheque_id);
-            }
+            await supabase.from('checks').insert([{
+               type: 'issued',
+               check_number: form.details.cheque_number,
+               bank_name: form.details.bank_name,
+               amount: Number(form.amount),
+               issue_date: form.date,
+               cash_date: form.details.cheque_date,
+               status: 'pending',
+               partner_id: form.contact_id
+            }]);
          }
       }
 
       setShowBuilder(false);
       resetForm();
       fetchPayments();
-      if (activeTab === 'out') fetchAvailableCustomerCheques();
 
     } catch (e: any) {
       console.error(e);
@@ -182,7 +175,7 @@ function PaymentsContent() {
   const resetForm = () => {
     setForm({
       contact_id: '', date: new Date().toISOString().split('T')[0], amount: '', method: 'cash',
-      details: { memo_no: generateMemoNo(), number: '', transaction_id: '', bank_name: '', account_name: '', account_number: '', branch: '', datetime: '', cheque_type: 'own', cheque_number: '', cheque_date: '', selected_customer_cheque_id: '' },
+      details: { memo_no: generateMemoNo(), number: '', transaction_id: '', bank_name: '', account_name: '', account_number: '', branch: '', datetime: '', cheque_number: '', cheque_date: '', internal_account_id: '' },
       authorized_signature: '', received_by: ''
     });
   };
@@ -199,6 +192,17 @@ function PaymentsContent() {
       if (['bikash', 'nagad', 'rocket', 'upay'].includes(form.method)) {
          return (
             <div className={`grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100`}>
+               <div className="col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                     {activeTab === 'in' ? 'Receiving To (Your Account)' : 'Paying From (Your Account)'}
+                  </label>
+                  <select required value={form.details.internal_account_id} onChange={e => setForm({...form, details: {...form.details, internal_account_id: e.target.value}})} className="w-full border rounded-lg p-2.5 outline-none focus:ring-1 bg-gray-50 text-gray-900 font-bold">
+                     <option value="" disabled>Select your {form.method} account</option>
+                     {internalAccounts.filter(acc => acc.account_type === 'wallet' && acc.provider_name.toLowerCase() === form.method.toLowerCase()).map(acc => (
+                         <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number} {acc.account_name ? `(${acc.account_name})` : ''}</option>
+                     ))}
+                  </select>
+               </div>
                <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                      {activeTab === 'in' ? 'Send Number (Customer\'s)' : 'Received Number (Supplier/Processor\'s)'}
@@ -218,11 +222,19 @@ function PaymentsContent() {
          if (activeTab === 'in') { // Received
             return (
                <div className="grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
-                     <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  <div className="col-span-2">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Receiving Bank Account (Your Account)</label>
+                     <select required value={form.details.internal_account_id} onChange={e => {
+                        const selected = internalAccounts.find(a => a.id === e.target.value);
+                        setForm({...form, details: {...form.details, internal_account_id: e.target.value, bank_name: selected?.provider_name || '', account_number: selected?.account_number || '', account_name: selected?.account_name || '', branch: selected?.branch || ''}});
+                     }} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none">
+                        <option value="" disabled>Select your Bank Account</option>
+                        {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                            <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                        ))}
+                     </select>
                   </div>
-                  <div>
+                  <div className="col-span-2 md:col-span-1">
                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Receive Date and Time</label>
                      <input required type="datetime-local" value={form.details.datetime} onChange={e => setForm({...form, details: {...form.details, datetime: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
                   </div>
@@ -231,21 +243,17 @@ function PaymentsContent() {
          } else { // Paid
             return (
                <div className="grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
-                  <div className="col-span-2 md:col-span-1">
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
-                     <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
-                  </div>
-                  <div className="col-span-2 md:col-span-1">
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Name</label>
-                     <input required type="text" value={form.details.account_name} onChange={e => setForm({...form, details: {...form.details, account_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
-                  </div>
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Number</label>
-                     <input required type="text" value={form.details.account_number} onChange={e => setForm({...form, details: {...form.details, account_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
-                  </div>
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Branch</label>
-                     <input required type="text" value={form.details.branch} onChange={e => setForm({...form, details: {...form.details, branch: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  <div className="col-span-2">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Paying Bank Account (Your Account)</label>
+                     <select required value={form.details.internal_account_id} onChange={e => {
+                        const selected = internalAccounts.find(a => a.id === e.target.value);
+                        setForm({...form, details: {...form.details, internal_account_id: e.target.value, bank_name: selected?.provider_name || '', account_number: selected?.account_number || '', account_name: selected?.account_name || '', branch: selected?.branch || ''}});
+                     }} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none">
+                        <option value="" disabled>Select your Bank Account</option>
+                        {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                            <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                        ))}
+                     </select>
                   </div>
                   <div className="col-span-2">
                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Send Date and Time</label>
@@ -281,47 +289,19 @@ function PaymentsContent() {
             );
          } else { // Paid
             return (
-               <div className="mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100 flex flex-col gap-4">
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Origin</label>
-                     <div className="flex gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-gray-50 flex-1">
-                           <input type="radio" checked={form.details.cheque_type === 'own'} onChange={() => setForm({...form, details: {...form.details, cheque_type: 'own'}})} className="w-4 h-4 text-indigo-600" />
-                           <span className="font-bold text-gray-800">Own Cheque</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-gray-50 flex-1">
-                           <input type="radio" checked={form.details.cheque_type === 'customer'} onChange={() => setForm({...form, details: {...form.details, cheque_type: 'customer'}})} className="w-4 h-4 text-indigo-600" />
-                           <span className="font-bold text-gray-800">Customer's Cheque (Endorse)</span>
-                        </label>
-                     </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
+                  <div className="col-span-2">
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
+                     <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
                   </div>
-
-                  {form.details.cheque_type === 'own' ? (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
-                           <input required type="text" value={form.details.bank_name} onChange={e => setForm({...form, details: {...form.details, bank_name: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
-                        </div>
-                        <div>
-                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Number</label>
-                           <input required type="text" value={form.details.cheque_number} onChange={e => setForm({...form, details: {...form.details, cheque_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
-                        </div>
-                        <div>
-                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Date</label>
-                           <input required type="date" value={form.details.cheque_date} onChange={e => setForm({...form, details: {...form.details, cheque_date: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
-                        </div>
-                     </div>
-                  ) : (
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 bg-amber-100 text-amber-800 px-2 py-1 rounded inline-flex mb-2">Select the Customer's Cheque to Transfer</label>
-                        <select required value={form.details.selected_customer_cheque_id} onChange={e => setForm({...form, details: {...form.details, selected_customer_cheque_id: e.target.value}})} className="w-full border rounded-lg p-3 bg-gray-50 font-bold text-gray-900 outline-none">
-                           <option value="" disabled>-- Available Cheques --</option>
-                           {availableCheques.map(c => (
-                              <option key={c.id} value={c.id}>#{c.check_number} - {c.bank_name} - ${c.amount}</option>
-                           ))}
-                        </select>
-                     </div>
-                  )}
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Number</label>
+                     <input required type="text" value={form.details.cheque_number} onChange={e => setForm({...form, details: {...form.details, cheque_number: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none font-mono" />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cheque Date</label>
+                     <input required type="date" value={form.details.cheque_date} onChange={e => setForm({...form, details: {...form.details, cheque_date: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+                  </div>
                </div>
             );
          }
@@ -392,8 +372,13 @@ function PaymentsContent() {
                         </td>
                         <td className="px-6 py-4">
                            <span className="text-xs px-2 py-1 bg-slate-100 text-slate-700 font-extrabold uppercase rounded border border-slate-200 whitespace-nowrap">{p.method.replace('_', ' ')}</span>
-                           {isJSON && p.payment_method_details.transaction_id && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase">TX: {p.payment_method_details.transaction_id}</div>}
-                           {isJSON && p.payment_method_details.cheque_number && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase">CHK: {p.payment_method_details.cheque_number}</div>}
+                           {isJSON && p.payment_method_details.internal_account_id && internalAccounts.find(a => a.id === p.payment_method_details.internal_account_id) && (
+                              <div className="text-[10px] font-bold mt-1 text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100 inline-block">
+                                 {internalAccounts.find(a => a.id === p.payment_method_details.internal_account_id)?.provider_name} - {internalAccounts.find(a => a.id === p.payment_method_details.internal_account_id)?.account_number}
+                              </div>
+                           )}
+                           {isJSON && p.payment_method_details.transaction_id && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase block">TX: {p.payment_method_details.transaction_id}</div>}
+                           {isJSON && p.payment_method_details.cheque_number && <div className="text-[10px] font-mono mt-1 text-gray-500 uppercase block">CHK: {p.payment_method_details.cheque_number}</div>}
                         </td>
                         <td className="px-6 py-4 font-extrabold text-slate-900 text-lg">
                            ${Number(p.amount).toLocaleString()}
@@ -505,11 +490,16 @@ function PaymentsContent() {
                   <h3 className="text-xl font-extrabold text-slate-800 mb-6 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Signatures & Authorizations</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Authorized Signature (Manager Layer)</label>
-                        <input required type="text" placeholder="e.g. John Doe, Management" value={form.authorized_signature} onChange={e => setForm({...form, authorized_signature: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 font-bold text-gray-900 bg-white outline-none focus:ring-2 focus:ring-slate-800" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5"><UserCheck className="w-4 h-4 text-slate-500" /> Authorized Signature</label>
+                        <select required value={form.authorized_signature} onChange={e => setForm({...form, authorized_signature: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 font-bold text-gray-900 bg-white outline-none focus:ring-2 focus:ring-slate-800 appearance-none">
+                           <option value="" disabled>-- Select Authorizer --</option>
+                           {employees.filter(e => e.is_authorizer).map(emp => (
+                              <option key={emp.id} value={emp.name}>{emp.name}</option>
+                           ))}
+                        </select>
                      </div>
                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Received By (Employee / Teller)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5"><Users className="w-4 h-4 text-slate-500" /> Received By</label>
                         <input required type="text" placeholder="e.g. Alice Teller" value={form.received_by} onChange={e => setForm({...form, received_by: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 font-bold text-gray-900 bg-white outline-none focus:ring-2 focus:ring-slate-800" />
                      </div>
                   </div>

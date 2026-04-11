@@ -14,7 +14,7 @@ function StockContent() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [hasBarcode, setHasBarcode] = useState(false);
-  
+
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -31,14 +31,14 @@ function StockContent() {
   };
 
   // ---------------- নতুন ফিল্ডগুলো যুক্ত করা হলো ----------------
-  const [formData, setFormData] = useState({
-    name: '', sku: '', price: 0, cost: 0, stock_quantity: 0, is_tracked: true,
-    low_stock_alert: false, minimum_stock: 0,
-    unit: 'pcs', unit_value: 1, barcode: '', use_for_processing: false, 
-    processing_price_auto: 0, processing_price_manual: 0,
+  const [formData, setFormData] = useState<any>({
+    name: '', sku: '', price: '', cost: '', stock_quantity: '', is_tracked: true,
+    low_stock_alert: false, minimum_stock: '',
+    unit: 'pcs', unit_value: 1, barcode: '', use_for_processing: false,
+    processing_price_auto: '', processing_price_manual: '',
     image_urls: [] as string[]
   });
-  
+
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
@@ -55,11 +55,11 @@ function StockContent() {
     else setProducts(data ?? []);
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     setSearchQuery('');
     setStockFilter('all');
     setTrackedFilter('all');
-    fetchProducts(); 
+    fetchProducts();
   }, [tab]);
 
   // Click outside to close menus
@@ -95,12 +95,12 @@ function StockContent() {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
       const totalImages = imageFiles.length + filesArray.length;
-      
+
       if (totalImages > 5) {
         alert('You can only upload a maximum of 5 images.');
         return;
       }
-      
+
       setImageFiles(prev => [...prev, ...filesArray]);
       const newPreviews = filesArray.map(file => URL.createObjectURL(file));
       setImagePreviews(prev => [...prev, ...newPreviews]);
@@ -112,9 +112,9 @@ function StockContent() {
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
     // Remove from formData if it's an existing URL
     if (formData.image_urls[index]) {
-      setFormData(prev => ({
+      setFormData((prev: any) => ({
         ...prev,
-        image_urls: prev.image_urls.filter((_, i) => i !== index)
+        image_urls: prev.image_urls.filter((_: any, i: number) => i !== index)
       }));
     }
   };
@@ -138,12 +138,12 @@ function StockContent() {
     try {
       // 1. Upload new images if any
       const finalImageUrls = imageFiles.length > 0 ? await uploadImagesToSupabase() : formData.image_urls;
-      
+
       let finalSku = formData.sku.trim();
       if (!finalSku) {
         finalSku = `SKU-${Date.now().toString().slice(-6)}`;
       }
-      
+
       const payload = { ...formData, sku: finalSku, image_urls: finalImageUrls, category };
 
       if (editingId) {
@@ -166,10 +166,10 @@ function StockContent() {
     setShowForm(false);
     setEditingId(null);
     setHasBarcode(false);
-    setFormData({ 
-      name: '', sku: '', price: 0, cost: 0, stock_quantity: 0, is_tracked: true,
-      low_stock_alert: false, minimum_stock: 0,
-      unit: 'pcs', unit_value: 1, barcode: '', use_for_processing: false, processing_price_auto: 0, processing_price_manual: 0, image_urls: []
+    setFormData({
+      name: '', sku: '', price: '', cost: '', stock_quantity: '', is_tracked: true,
+      low_stock_alert: false, minimum_stock: '',
+      unit: 'pcs', barcode: '', use_for_processing: false, processing_price_auto: '', processing_price_manual: '', image_urls: []
     });
     setImageFiles([]);
     setImagePreviews([]);
@@ -179,18 +179,17 @@ function StockContent() {
     setFormData({
       name: product.name || '',
       sku: product.sku || '',
-      price: product.price || 0,
-      cost: product.cost || 0,
-      stock_quantity: product.stock_quantity || 0,
+      price: product.price ?? '',
+      cost: product.cost ?? '',
+      stock_quantity: product.stock_quantity ?? '',
       is_tracked: product.is_tracked ?? true,
       low_stock_alert: product.low_stock_alert ?? false,
-      minimum_stock: product.minimum_stock || 0,
+      minimum_stock: product.minimum_stock ?? '',
       unit: product.unit || 'pcs',
-      unit_value: product.unit_value || 1,
       barcode: product.barcode || '',
       use_for_processing: product.use_for_processing ?? false,
-      processing_price_auto: product.processing_price_auto || 0,
-      processing_price_manual: product.processing_price_manual || 0,
+      processing_price_auto: product.processing_price_auto ?? '',
+      processing_price_manual: product.processing_price_manual ?? '',
       image_urls: product.image_urls || []
     });
     setHasBarcode(!!product.barcode);
@@ -201,7 +200,7 @@ function StockContent() {
   };
 
   const handleDelete = async (id: string) => {
-    if(!window.confirm('Are you sure you want to delete this product?')) return;
+    if (!window.confirm('Are you sure you want to delete this product?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) handleSupabaseError(error, 'delete', 'products');
     else fetchProducts();
@@ -229,7 +228,7 @@ function StockContent() {
           <Package className="w-6 h-6 text-indigo-600" />
           {headingTitle} Management
         </h1>
-        <button onClick={() => { if(!showForm) resetEmpForm(); setShowForm(!showForm); }}
+        <button onClick={() => { if (!showForm) resetEmpForm(); setShowForm(!showForm); }}
           className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-semibold shadow-sm transition-colors">
           <Plus className="w-4 h-4" /> Add Product
         </button>
@@ -238,7 +237,7 @@ function StockContent() {
       {/* ---------------- FORM SECTION ---------------- */}
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 print:hidden">
-          
+
           {/* Image Upload Area (5 pics slot) */}
           <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-xl">
             <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -275,12 +274,12 @@ function StockContent() {
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">Price</label>
-              <input required type="number" step="0.01" value={formData.price} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input required type="number" step="0.01" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value === '' ? '' : Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">Unit & Value</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Unit</label>
               <div className="flex gap-2">
-                <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} className="w-1/2 border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
                   <option value="pcs">Pieces (pcs)</option>
                   <option value="kg">Kilogram (kg)</option>
                   <option value="g">Gram (g)</option>
@@ -291,43 +290,42 @@ function StockContent() {
                   <option value="meter">Meter (m)</option>
                   <option value="feet">Feet (ft)</option>
                 </select>
-                <input type="number" step="0.01" value={formData.unit_value} onChange={e => setFormData({ ...formData, unit_value: Number(e.target.value) })} placeholder={`Qty in ${formData.unit}`} className="w-1/2 border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" />
               </div>
             </div>
-              <div className="flex flex-col justify-center mt-6">
-                <label className="flex items-center cursor-pointer mb-2">
-                  <input type="checkbox" checked={formData.is_tracked} onChange={e => setFormData({ ...formData, is_tracked: e.target.checked })} className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500" />
-                  <span className="text-sm font-bold text-gray-800 ml-3">Track stock</span>
-                </label>
-                {formData.is_tracked && (
-                  <div className="flex flex-col gap-3 ml-8">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Current stock:</span>
-                      <input type="number" value={formData.stock_quantity} onChange={e => setFormData({ ...formData, stock_quantity: Number(e.target.value) })} className="w-24 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                    
-                    <label className="flex items-center cursor-pointer">
-                      <input type="checkbox" checked={formData.low_stock_alert} onChange={e => setFormData({ ...formData, low_stock_alert: e.target.checked })} className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500" />
-                      <span className="text-sm font-semibold text-gray-700 ml-2">Low stock alert</span>
-                    </label>
-                    {formData.low_stock_alert && (
-                      <div className="flex items-center gap-2 ml-6">
-                        <span className="text-sm text-gray-600">Minimum stock:</span>
-                        <input type="number" value={formData.minimum_stock} onChange={e => setFormData({ ...formData, minimum_stock: Number(e.target.value) })} className="w-24 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
-                      </div>
-                    )}
+            <div className="flex flex-col justify-center mt-6">
+              <label className="flex items-center cursor-pointer mb-2">
+                <input type="checkbox" checked={formData.is_tracked} onChange={e => setFormData({ ...formData, is_tracked: e.target.checked })} className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500" />
+                <span className="text-sm font-bold text-gray-800 ml-3">Track stock</span>
+              </label>
+              {formData.is_tracked && (
+                <div className="flex flex-col gap-3 ml-8">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Current stock:</span>
+                    <input type="number" value={formData.stock_quantity} onChange={e => setFormData({ ...formData, stock_quantity: e.target.value === '' ? '' : Number(e.target.value) })} className="w-24 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
-                )}
-              </div>
+
+                  <label className="flex items-center cursor-pointer">
+                    <input type="checkbox" checked={formData.low_stock_alert} onChange={e => setFormData({ ...formData, low_stock_alert: e.target.checked })} className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500" />
+                    <span className="text-sm font-semibold text-gray-700 ml-2">Low stock alert</span>
+                  </label>
+                  {formData.low_stock_alert && (
+                    <div className="flex items-center gap-2 ml-6">
+                      <span className="text-sm text-gray-600">Minimum stock:</span>
+                      <input type="number" value={formData.minimum_stock} onChange={e => setFormData({ ...formData, minimum_stock: e.target.value === '' ? '' : Number(e.target.value) })} className="w-24 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="flex flex-col justify-start mt-2">
               <label className="flex items-center cursor-pointer mb-2">
-                <input type="checkbox" checked={hasBarcode} onChange={e => { setHasBarcode(e.target.checked); if (!e.target.checked) setFormData({...formData, barcode: ''}); }} className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500" />
+                <input type="checkbox" checked={hasBarcode} onChange={e => { setHasBarcode(e.target.checked); if (!e.target.checked) setFormData({ ...formData, barcode: '' }); }} className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500" />
                 <span className="text-sm font-bold text-gray-800 ml-3">Add barcode</span>
               </label>
               {hasBarcode && (
                 <div className="ml-8">
-                   <input type="text" value={formData.barcode} onChange={e => setFormData({ ...formData, barcode: e.target.value })} placeholder="Scan or type barcode" className="w-full border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input type="text" value={formData.barcode} onChange={e => setFormData({ ...formData, barcode: e.target.value })} placeholder="Scan or type barcode" className="w-full border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               )}
             </div>
@@ -343,17 +341,17 @@ function StockContent() {
                   <div className="flex flex-col gap-2 ml-8 mt-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600 font-semibold w-60">Price for processing in auto:</span>
-                      <input type="number" step="0.01" value={formData.processing_price_auto} onChange={e => setFormData({ ...formData, processing_price_auto: Number(e.target.value) })} className="w-32 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <input type="number" step="0.01" value={formData.processing_price_auto} onChange={e => setFormData({ ...formData, processing_price_auto: e.target.value === '' ? '' : Number(e.target.value) })} className="w-32 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600 font-semibold w-60">Price for processing manually:</span>
-                      <input type="number" step="0.01" value={formData.processing_price_manual} onChange={e => setFormData({ ...formData, processing_price_manual: Number(e.target.value) })} className="w-32 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <input type="number" step="0.01" value={formData.processing_price_manual} onChange={e => setFormData({ ...formData, processing_price_manual: e.target.value === '' ? '' : Number(e.target.value) })} className="w-32 border border-gray-200 rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                   </div>
                 )}
               </div>
             )}
-            
+
             <div className="md:col-span-3 flex justify-end gap-3 mt-4 border-t border-gray-100 pt-5">
               <button type="button" onClick={resetEmpForm} className="bg-white text-gray-700 px-6 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 font-bold transition-colors">
                 Cancel
