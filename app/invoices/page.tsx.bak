@@ -17,8 +17,6 @@ export default function InvoicesPage() {
    );
 }
 
-type InvoiceItem = { product_id: string; quantity: number; price: any; selected_head?: string };
-
 function InvoicesContent() {
    const router = useRouter();
    const searchParams = useSearchParams();
@@ -43,7 +41,7 @@ function InvoicesContent() {
    const [form, setForm] = useState({
       contact_id: '',
       date: new Date().toISOString().split('T')[0],
-      items: [{ product_id: '', quantity: 1, price: '' as any }] as InvoiceItem[],
+      items: [{ product_id: '', quantity: 1, price: '' as any }],
       discount: '' as any,
       discount_type: 'amount',
       discount_method: '',
@@ -117,7 +115,6 @@ function InvoicesContent() {
                      product_id: i.product_id || '',
                      quantity: Number(i.quantity) || 1,
                      price: Number(i.price) || 0,
-                     selected_head: i.selected_head || ''
                   }))
                   : prev.items,
             }));
@@ -170,10 +167,7 @@ function InvoicesContent() {
 
       if (field === 'product_id') {
          const prod = products.find(p => p.id === value);
-         if (prod) {
-            newItems[index].price = Number(prod.price || 0);
-            newItems[index].selected_head = ''; // reset head
-         }
+         if (prod) newItems[index].price = Number(prod.price || 0);
       }
       setForm({ ...form, items: newItems });
    };
@@ -231,8 +225,7 @@ function InvoicesContent() {
             product_id: item.product_id,
             quantity: Number(item.quantity),
             price: Number(item.price),
-            subtotal: Number(item.quantity) * Number(item.price),
-            selected_head: item.selected_head || null
+            subtotal: Number(item.quantity) * Number(item.price)
          }));
          await supabase.from('invoice_items').insert(invoiceItemsTarget);
 
@@ -303,7 +296,7 @@ function InvoicesContent() {
       setHasPayment(false);
       setHasDiscount(false);
       setForm({
-         contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: 1, price: '' as any }] as InvoiceItem[], discount: '' as any, discount_type: 'amount', discount_method: '',
+         contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: 1, price: '' as any }], discount: '' as any, discount_type: 'amount', discount_method: '',
          payment_amount: '' as any, payment_method: 'cash', cheque_type: 'own', payment_details: {}, authorized_signature: '', received_by: ''
       });
    };
@@ -626,34 +619,15 @@ function InvoicesContent() {
                         <PackageSearch className="w-5 h-5 text-indigo-500" /> Product Line Items
                      </h3>
 
-                     {form.items.map((item, index) => {
-                        const selectedProduct = products.find((p: any) => p.id === item.product_id);
-                        const heads: string[] = (selectedProduct?.product_heads || []).filter((h: string) => h && h.trim());
-                        return (
+                     {form.items.map((item, index) => (
                         <div key={index} className="grid grid-cols-12 gap-3 mb-3 bg-white p-3 rounded-xl shadow-sm border border-slate-100 items-end">
-                           <div className={`col-span-12 ${heads.length > 0 ? 'md:col-span-3' : 'md:col-span-5'}`}>
+                           <div className="col-span-12 md:col-span-5">
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Product</label>
                               <select required value={item.product_id} onChange={e => handleItemChange(index, 'product_id', e.target.value)} className="w-full border border-gray-200 rounded-lg p-2.5 font-bold text-gray-900 bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500">
                                  <option value="" disabled>Select Product...</option>
                                  {products.filter(p => activeTab === 'sell' ? p.category === 'finished-goods' : p.category === 'raw-materials').map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock_quantity})</option>)}
                               </select>
                            </div>
-                           {heads.length > 0 && (
-                              <div className="col-span-12 md:col-span-2 animate-in fade-in slide-in-from-top-1">
-                                 <label className="block text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">Select Head</label>
-                                 <select
-                                    required
-                                    value={item.selected_head || ''}
-                                    onChange={e => handleItemChange(index, 'selected_head', e.target.value)}
-                                    className="w-full border border-indigo-200 rounded-lg p-2.5 font-bold text-indigo-900 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-400"
-                                 >
-                                    <option value="" disabled>-- Select Head --</option>
-                                    {heads.map((h: string, hi: number) => (
-                                       <option key={hi} value={h}>{h}</option>
-                                    ))}
-                                 </select>
-                              </div>
-                           )}
                            <div className="col-span-6 md:col-span-2">
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Price</label>
                               <input type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value === '' ? '' : Number(e.target.value))} className="w-full border border-gray-200 rounded-lg p-2.5 font-bold text-gray-900 bg-gray-50" />
@@ -674,8 +648,7 @@ function InvoicesContent() {
                               </button>
                            </div>
                         </div>
-                        );
-                     })}
+                     ))}
                      <button type="button" onClick={handleAddItem} className="mt-3 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
                         <Plus className="w-4 h-4" /> Add Another Item
                      </button>
@@ -879,12 +852,7 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
                            <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">No items found.</td></tr>
                         ) : items.map((item, idx) => (
                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="px-4 py-3 text-sm">
-                                <span className="font-semibold text-slate-800">{item.products?.name || 'Unknown'}</span>
-                                {item.selected_head && (
-                                   <span className="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">{item.selected_head}</span>
-                                )}
-                              </td>
+                              <td className="px-4 py-3 font-semibold text-slate-800 text-sm">{item.products?.name || 'Unknown'}</td>
                               <td className="px-4 py-3 text-right text-sm">{item.quantity} <span className="text-gray-400 text-xs">{item.products?.unit || ''}</span></td>
                               <td className="px-4 py-3 text-right font-mono text-sm">৳ {Number(item.price).toLocaleString()}</td>
                               <td className="px-4 py-3 text-right font-mono font-bold text-sm">৳ {Number(item.subtotal).toLocaleString()}</td>

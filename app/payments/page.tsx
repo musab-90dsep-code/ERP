@@ -3,10 +3,10 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Banknote, ArrowUpRight, ArrowDownLeft, Store, Users, UserCheck, Calendar, CheckCircle2, X, Wallet, Building2, Ticket } from 'lucide-react';
+import { Plus, Trash2, Banknote, ArrowUpRight, ArrowDownLeft, Store, Users, UserCheck, Calendar, CheckCircle2, X, Wallet, Building2, Ticket, Eye } from 'lucide-react';
 
 type PaymentType = 'in' | 'out'; // in = Received (Customers), out = Paid (Suppliers/Processors)
-type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'cheque';
+type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'bank_to_bank_transfer' | 'cheque';
 
 export default function PaymentsPage() {
   return (
@@ -54,6 +54,9 @@ function PaymentsContent() {
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [viewPayment, setViewPayment] = useState<any>(null);
+  const [selectedContactDue, setSelectedContactDue] = useState<number | null>(null);
+  const [loadingDue, setLoadingDue] = useState(false);
 
   useEffect(() => {
     if (!form.details.memo_no) {
@@ -104,6 +107,52 @@ function PaymentsContent() {
       .order('created_at', { ascending: false });
     setPayments(data || []);
   };
+
+  useEffect(() => {
+    if (!form.contact_id || !showBuilder) {
+      setSelectedContactDue(null);
+      return;
+    }
+    
+    const fetchCalculatedDue = async () => {
+      setLoadingDue(true);
+      try {
+        const invType = activeTab === 'in' ? 'sell' : 'buy';
+        
+        // Sum all invoice totals for this contact
+        const { data: invData, error: invErr } = await supabase
+          .from('invoices')
+          .select('total')
+          .eq('type', invType)
+          .eq('contact_id', form.contact_id);
+          
+        if (invErr) throw invErr;
+        
+        const totalInvoiced = (invData || []).reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
+        
+        // Sum all payments for this contact
+        const { data: payData, error: payErr } = await supabase
+          .from('payments')
+          .select('amount')
+          .eq('type', activeTab)
+          .eq('contact_id', form.contact_id);
+          
+        if (payErr) throw payErr;
+        
+        const totalPaid = (payData || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+        
+        const calcDue = Math.max(0, totalInvoiced - totalPaid);
+        setSelectedContactDue(calcDue);
+      } catch (err) {
+        console.error('Failed to fetch due', err);
+        setSelectedContactDue(null);
+      } finally {
+        setLoadingDue(false);
+      }
+    };
+    
+    fetchCalculatedDue();
+  }, [form.contact_id, activeTab, showBuilder]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,6 +266,52 @@ function PaymentsContent() {
          );
       }
       
+      // --- BANK TO BANK TRANSFER ---
+      if (form.method === 'bank_to_bank_transfer') {
+         const selectedContact = contacts.find(c => c.id === form.contact_id);
+         const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
+
+         return (
+            <div className="grid grid-cols-2 gap-4 mt-4 p-4 text-sm bg-white rounded-xl shadow-inner border border-gray-100">
+               <div className="col-span-2 md:col-span-1">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Your Bank Account</label>
+                  <select required value={form.details.internal_account_id} onChange={e => {
+                     setForm({...form, details: {...form.details, internal_account_id: e.target.value}});
+                  }} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none">
+                     <option value="" disabled>Select your Bank Account</option>
+                     {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                         <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                     ))}
+                  </select>
+               </div>
+               <div className="col-span-2 md:col-span-1">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                     {activeTab === 'in' ? 'Customer\'s Bank Account' : 'Supplier/Processor\'s Bank Account'}
+                  </label>
+                  <select required value={`${form.details.bank_name}|${form.details.account_number}`} onChange={e => {
+                     const val = e.target.value;
+                     const selectedBank = contactBanks.find((b: any) => `${b.bank_name}|${b.account_number}` === val);
+                     if (selectedBank) {
+                        setForm({...form, details: {...form.details, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch}});
+                     }
+                  }} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none">
+                     <option value="|" disabled>Select Partner Bank Account</option>
+                     {contactBanks.map((b: any, idx: number) => {
+                         if (!b.bank_name) return null;
+                         return <option key={idx} value={`${b.bank_name}|${b.account_number}`}>{b.bank_name} - {b.account_number}</option>
+                     })}
+                  </select>
+                  {contactBanks.length === 0 && <span className="text-[10px] text-red-500 font-bold mt-1 block">No banks added to this contact yet. Please add in Contacts manager.</span>}
+               </div>
+
+               <div className="col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transfer Date and Time</label>
+                  <input required type="datetime-local" value={form.details.datetime} onChange={e => setForm({...form, details: {...form.details, datetime: e.target.value}})} className="w-full border rounded-lg p-2.5 bg-gray-50 font-bold text-gray-900 outline-none" />
+               </div>
+            </div>
+         );
+      }
+
       // --- BANK TRANSFER ---
       if (form.method === 'bank_transfer') {
          if (activeTab === 'in') { // Received
@@ -388,7 +483,12 @@ function PaymentsContent() {
                            <div className="text-xs font-semibold text-gray-600 block mt-0.5"><span className="text-gray-400">Rcv:</span> {p.received_by || '-'}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                           <button onClick={() => handleDelete(p.id, p)} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"><Trash2 className="w-5 h-5"/></button>
+                           <div className="flex justify-end gap-2">
+                              <button onClick={() => setViewPayment(p)} className="text-gray-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-indigo-50 transition-colors" title="View Details">
+                                 <Eye className="w-5 h-5"/>
+                              </button>
+                              <button onClick={() => handleDelete(p.id, p)} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors" title="Delete Payment"><Trash2 className="w-5 h-5"/></button>
+                           </div>
                         </td>
                         </tr>
                      );
@@ -434,9 +534,16 @@ function PaymentsContent() {
                   </div>
 
                   <div className="relative z-10">
-                     <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                        <UserCheck className="w-4 h-4 text-indigo-500" /> Select {activeTab === 'in' ? 'Customer' : 'Supplier / Processor'}
-                     </label>
+                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
+                        <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+                           <UserCheck className="w-4 h-4 text-indigo-500" /> Select {activeTab === 'in' ? 'Customer' : 'Supplier / Processor'}
+                        </label>
+                        {form.contact_id && selectedContactDue !== null && (
+                           <span className="text-sm font-bold px-4 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-full shadow-sm animate-in fade-in zoom-in">
+                              {loadingDue ? 'Calculating due...' : `Total Due: ৳ ${Number(selectedContactDue).toLocaleString()}`}
+                           </span>
+                        )}
+                     </div>
                      <select required value={form.contact_id} onChange={e => setForm({...form, contact_id: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-slate-800 outline-none font-bold text-gray-900 bg-white text-lg">
                         <option value="" disabled>-- Choose Contact --</option>
                         {contacts.map(c => <option key={c.id} value={c.id}>{c.name} {c.shop_name ? `- ${c.shop_name}` : ''}</option>)}
@@ -470,7 +577,7 @@ function PaymentsContent() {
                      <div className="animate-in fade-in slide-in-from-top-2 border-t pt-4 border-opacity-50 border-inherit">
                         <label className={`block text-sm font-bold mb-2 ${activeTab === 'in' ? 'text-green-900' : 'text-orange-900'}`}>Payment Engine Type</label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-white p-3 rounded-2xl border shadow-inner">
-                           {['cash', 'bikash', 'nagad', 'rocket', 'upay', 'bank_transfer', 'cheque'].map(m => (
+                           {['cash', 'bikash', 'nagad', 'rocket', 'upay', 'bank_transfer', 'bank_to_bank_transfer', 'cheque'].map(m => (
                               <label key={m} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${form.method === m ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-500 shadow-sm' : 'border-gray-100 hover:bg-gray-50'}`}>
                                  <input type="radio" value={m} checked={form.method === m} onChange={() => setForm({...form, method: m as PaymentMethod})} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
                                  <span className={`font-bold text-sm uppercase tracking-wide ${form.method === m ? 'text-indigo-900' : 'text-gray-600'}`}>{m.replace('_', ' ')}</span>
@@ -518,6 +625,111 @@ function PaymentsContent() {
                </div>
 
             </form>
+         </div>
+      )}
+      
+      {/* View Modal */}
+      {viewPayment && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden shadow-black/50 flex flex-col max-h-[90vh]">
+               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                  <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                     <Wallet className="w-5 h-5 text-indigo-600" />
+                     Payment Details
+                  </h2>
+                  <button onClick={() => setViewPayment(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                     <X className="w-5 h-5" />
+                  </button>
+               </div>
+               
+               <div className="p-6 overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-6">
+                     <div className="col-span-2 md:col-span-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Payment ID</p>
+                        <p className="font-mono text-slate-800 mt-1">{viewPayment.id}</p>
+                     </div>
+                     <div className="col-span-2 md:col-span-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Transaction Date</p>
+                        <p className="text-slate-800 font-bold mt-1">{new Date(viewPayment.date).toLocaleDateString()}</p>
+                     </div>
+                     
+                     <div className="col-span-2">
+                        <p className="text-xs font-bold text-gray-500 uppercase">{activeTab === 'in' ? 'Customer' : 'Supplier / Processor'}</p>
+                        <p className="text-lg font-bold text-indigo-900 mt-1">
+                           {contacts.find(c => c.id === (viewPayment.payment_method_details?.partner_contact_id || viewPayment.contact_id))?.name || 'Linked to Invoice'}
+                        </p>
+                     </div>
+
+                     <div className="col-span-2 md:col-span-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Amount</p>
+                        <p className="text-2xl font-extrabold text-slate-900 mt-1 tracking-tight">
+                           <span className="font-sans">৳</span> {Number(viewPayment.amount).toLocaleString()}
+                        </p>
+                     </div>
+                     
+                     <div className="col-span-2 md:col-span-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Method</p>
+                        <p className="inline-block mt-1 px-3 py-1 bg-slate-100 text-slate-800 font-bold text-sm rounded-lg uppercase border border-slate-200">
+                           {viewPayment.method.replace('_', ' ')}
+                        </p>
+                     </div>
+
+                     {viewPayment.payment_method_details && Object.keys(viewPayment.payment_method_details).length > 0 && (
+                        <div className="col-span-2 bg-slate-50 rounded-xl p-4 border border-slate-200 mt-2">
+                           <p className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                              <Ticket className="w-4 h-4" /> Method Specific Details
+                           </p>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {Object.entries(viewPayment.payment_method_details).map(([key, value]) => {
+                                 if (!value) return null;
+                                 if (key === 'partner_contact_id') return null;
+                                 
+                                 let displayValue: any = value;
+                                 if (key === 'internal_account_id') {
+                                    const acc = internalAccounts.find(a => a.id === value);
+                                    if (acc) {
+                                       displayValue = `${acc.provider_name} - ${acc.account_number}`;
+                                    }
+                                 }
+
+                                 return (
+                                    <div key={key} className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm overflow-hidden">
+                                       <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">
+                                          {key.replace(/_/g, ' ')}
+                                       </span>
+                                       <span className="text-sm font-semibold text-slate-700 break-all">
+                                          {displayValue}
+                                       </span>
+                                    </div>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     )}
+
+                     <div className="col-span-2 grid grid-cols-2 gap-4 border-t border-gray-100 pt-6 mt-2">
+                        <div>
+                           <p className="text-xs font-bold text-gray-500 uppercase text-center">Authorized By</p>
+                           <p className="text-slate-800 font-semibold text-center mt-2 font-mono bg-slate-50 py-2 rounded-lg border border-slate-200">
+                              {viewPayment.authorized_signature || 'N/A'}
+                           </p>
+                        </div>
+                        <div>
+                           <p className="text-xs font-bold text-gray-500 uppercase text-center">Received By</p>
+                           <p className="text-slate-800 font-semibold text-center mt-2 font-mono bg-slate-50 py-2 rounded-lg border border-slate-200">
+                              {viewPayment.received_by || 'N/A'}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+               
+               <div className="p-6 border-t border-gray-100 bg-slate-50 flex justify-end">
+                  <button onClick={() => setViewPayment(null)} className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-all shadow-sm">
+                     Close
+                  </button>
+               </div>
+            </div>
          </div>
       )}
     </div>

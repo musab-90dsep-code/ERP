@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Mail, FileText, Upload, User, Eye, Pencil, X, Search, Briefcase, Phone, DollarSign, DownloadCloud, Calendar, MessageSquare, MapPin, Hash } from 'lucide-react';
+import { Plus, Trash2, Mail, FileText, Upload, User, Eye, Pencil, X, Search, Briefcase, Phone, DollarSign, DownloadCloud, Calendar, MessageSquare, MapPin, Hash, LayoutGrid, List } from 'lucide-react';
 
 interface EmployeeTabProps {
   employees: any[];
@@ -14,6 +14,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   const [viewingEmployee, setViewingEmployee] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -208,6 +209,23 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
             ))}
           </select>
 
+          <div className="bg-white border border-gray-200 rounded-lg p-1 flex items-center shadow-sm">
+            <button 
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+              title="Table View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setViewMode('card')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+              title="Card View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+
           <button
             onClick={() => { resetEmpForm(); setShowForm(true); }}
             className="bg-blue-600 text-white px-5 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors shadow-md font-semibold"
@@ -278,7 +296,24 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                       <label className="block text-sm font-bold text-gray-700 mb-1.5 pl-1">Job Role</label>
                       <div className="relative">
                         <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input required type="text" placeholder="e.g. Developer" value={empData.role} onChange={e => setEmpData({ ...empData, role: e.target.value })} className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                        <select required value={empData.role} onChange={e => setEmpData({ ...empData, role: e.target.value })} className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all appearance-none bg-white">
+                          <option value="" disabled>Select Job Role</option>
+                          <option value="Manager">Manager</option>
+                          <option value="Admin">Admin</option>
+                          <option value="Sales Representative">Sales Representative</option>
+                          <option value="Accountant">Accountant</option>
+                          <option value="Operations">Operations</option>
+                          <option value="Delivery Personnel">Delivery Personnel</option>
+                          <option value="Factory Worker">Factory Worker</option>
+                          <option value="Processor">Processor</option>
+                          <option value="Support Staff">Support Staff</option>
+                          <option value="Driver">Driver</option>
+                          <option value="Labor">Labor</option>
+                          <option value="Other">Other</option>
+                          {empData.role && !['Manager', 'Admin', 'Sales Representative', 'Accountant', 'Operations', 'Delivery Personnel', 'Factory Worker', 'Processor', 'Support Staff', 'Driver', 'Labor', 'Other'].includes(empData.role) && (
+                            <option value={empData.role}>{empData.role} (Legacy)</option>
+                          )}
+                        </select>
                       </div>
                     </div>
                     <div>
@@ -448,7 +483,8 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
         </div>
       )}
 
-      {/* Employee Table */}
+      {/* Employee Data Display */}
+      {viewMode === 'table' ? (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -542,6 +578,85 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
           </table>
         </div>
       </div>
+      ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+         {filteredEmployees.map(e => (
+            <div key={e.id} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col hover:shadow-xl hover:shadow-blue-500/5 transition-all hover:-translate-y-1 relative group">
+               <div className="flex justify-between items-start mb-4">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center overflow-hidden border border-blue-100/50 shadow-inner shrink-0 relative">
+                     {e.profile_image_url ? (
+                        <img src={e.profile_image_url} alt={e.name} className="w-full h-full object-cover" />
+                     ) : (
+                        <User className="w-8 h-8 text-blue-300" />
+                     )}
+                     {e.is_authorizer && (
+                        <div className="absolute top-0 right-0 bg-yellow-400 w-3 h-3 rounded-bl-lg shadow-sm" title="Authorizer"></div>
+                     )}
+                  </div>
+                  <div className="flex flex-col gap-1 -mt-2 -mr-2">
+                     <button onClick={() => setViewingEmployee(e)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors" title="View Profile">
+                       <Eye className="w-5 h-5" />
+                     </button>
+                  </div>
+               </div>
+               
+               <div className="mb-4">
+                  <h3 className="font-extrabold text-gray-900 text-lg leading-tight line-clamp-1">{e.name}</h3>
+                  <span className="inline-flex items-center mt-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 uppercase tracking-wide">
+                     {e.role || 'Unassigned'}
+                  </span>
+               </div>
+               
+               <div className="flex-1 space-y-3 mb-5 border-t border-gray-100 pt-4">
+                  {(() => {
+                     const phones = parsePhones(e.phone, e.whatsapp);
+                     if (phones.length > 0) {
+                        return (
+                           <div className="flex items-center justify-between gap-2 overflow-hidden bg-gray-50 rounded-lg p-2 border border-gray-100">
+                             <span className="flex items-center gap-2 text-gray-800 font-bold text-sm truncate"><Phone className="w-3.5 h-3.5 text-blue-500 shrink-0" /> {phones[0].number}</span>
+                             <div className="flex gap-1 shrink-0">
+                               {phones[0].is_whatsapp && <span className="text-[9px] font-extrabold text-green-600 bg-green-100 px-1 py-0.5 rounded">WA</span>}
+                               {phones[0].is_imo && <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-100 px-1 py-0.5 rounded">imo</span>}
+                               {phones[0].is_telegram && <span className="text-[9px] font-extrabold text-blue-600 bg-blue-100 px-1 py-0.5 rounded">TG</span>}
+                             </div>
+                           </div>
+                        )
+                     }
+                     return <div className="text-gray-400 italic text-sm p-2">No phone number</div>
+                  })()}
+                  
+                  <span className="flex items-center gap-2.5 text-sm text-gray-600 font-medium px-1 truncate"><Mail className="w-4 h-4 text-orange-400 shrink-0" /> {e.email || 'No email'}</span>
+               </div>
+
+               <div className="pt-4 border-t border-gray-100 flex items-center justify-between relative z-10 bg-white">
+                  <div>
+                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Base Salary</p>
+                     <p className="font-extrabold text-gray-900"><span className="mr-0.5 text-sm text-gray-600">৳</span>{Number(e.salary || 0).toLocaleString()} <span className="text-xs font-medium text-gray-500">/mo</span></p>
+                  </div>
+                  
+                  <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button onClick={() => handleEdit(e)} className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100" title="Edit">
+                       <Pencil className="w-4 h-4" />
+                     </button>
+                     <button onClick={() => { if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="Delete">
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                  </div>
+               </div>
+            </div>
+         ))}
+         
+         {filteredEmployees.length === 0 && (
+            <div className="col-span-full py-20 text-center bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-200">
+               <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
+                  <User className="w-10 h-10 text-gray-300" />
+               </div>
+               <h3 className="text-xl font-extrabold text-gray-900 mb-2">No Employees Found</h3>
+               <p className="text-gray-500 font-medium">Clear filters or add a new employee to update your directory.</p>
+            </div>
+         )}
+      </div>
+      )}
 
       {/* View Profile Modal */}
       {viewingEmployee && (

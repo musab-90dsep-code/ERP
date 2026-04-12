@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { handleSupabaseError } from '@/lib/supabase-utils';
-import { Plus, Trash2, Pencil, Image as ImageIcon, MapPin, Mail, Building2, UserCircle2, X, Phone, MessageSquare, CreditCard, Eye } from 'lucide-react';
+import { Plus, Trash2, Pencil, Image as ImageIcon, MapPin, Mail, Building2, UserCircle2, X, Phone, MessageSquare, CreditCard, Eye, Users, LayoutGrid, List, Activity, Receipt, Banknote } from 'lucide-react';
 
 interface Personnel {
   id?: string;
@@ -48,10 +48,36 @@ export default function ContactsTypePage() {
   
   const [showEmployeeSection, setShowEmployeeSection] = useState(false);
   const [showBankSection, setShowBankSection] = useState(false);
+  const [mfsData, setMfsData] = useState({ bikash: '', nagad: '', rocket: '', upay: '' });
+  const [showMfsSection, setShowMfsSection] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
+
+  const [modalTab, setModalTab] = useState<'profile' | 'ledger'>('profile');
+  const [transactions, setTransactions] = useState({ invoices: [] as any[], payments: [] as any[], loading: false });
+
+  useEffect(() => {
+    if (viewingContact) {
+      setModalTab('profile');
+      fetchTransactions(viewingContact.id);
+    } else {
+      setTransactions({ invoices: [], payments: [], loading: false });
+    }
+  }, [viewingContact]);
+
+  const fetchTransactions = async (contactId: string) => {
+    setTransactions(prev => ({ ...prev, loading: true }));
+    try {
+      const { data: invs } = await supabase.from('invoices').select('*').eq('contact_id', contactId).order('date', { ascending: false });
+      const { data: pays } = await supabase.from('payments').select('*').eq('contact_id', contactId).order('date', { ascending: false });
+      setTransactions({ invoices: invs || [], payments: pays || [], loading: false });
+    } catch (e) {
+      setTransactions({ invoices: [], payments: [], loading: false });
+    }
+  };
 
   useEffect(() => {
     if (!dbType) {
@@ -106,7 +132,17 @@ export default function ContactsTypePage() {
         email: formData.email,
         address: formData.address,
         photo_url: finalImageUrl,
-        bank_details: showBankSection ? formData.bank_details : {}
+        bank_details: (() => {
+          let banks = showBankSection ? formData.bank_details.filter(b => b.bank_name) : [];
+          if (showMfsSection) {
+             Object.entries(mfsData).forEach(([provider, number]) => {
+                if (number) {
+                   banks.push({ bank_name: provider, account_name: formData.name, account_number: number, branch: '' });
+                }
+             });
+          }
+          return banks;
+        })()
       };
 
       let currentContactId = editingId;
@@ -166,10 +202,38 @@ export default function ContactsTypePage() {
       bank_details: Array.isArray(contact.bank_details) && contact.bank_details.length > 0 ? contact.bank_details : (contact.bank_details && Object.keys(contact.bank_details).length > 0 ? [contact.bank_details] : [{ bank_name: '', account_name: '', account_number: '', branch: '' }])
     });
     
-    if ((Array.isArray(contact.bank_details) && contact.bank_details.length > 0) || (contact.bank_details && Object.keys(contact.bank_details).length > 0)) {
+    
+    let mfs = { bikash: '', nagad: '', rocket: '', upay: '' };
+    let actualBanks: { bank_name: string; account_name: string; account_number: string; branch: string }[] = [];
+    let hasMfs = false;
+    let hasBanks = false;
+    if (Array.isArray(contact.bank_details)) {
+       contact.bank_details.forEach((b: any) => {
+          if (b && typeof b.bank_name === 'string' && ['bikash', 'nagad', 'rocket', 'upay'].includes(b.bank_name.toLowerCase())) {
+             mfs[b.bank_name.toLowerCase() as keyof typeof mfs] = b.account_number;
+             hasMfs = true;
+          } else if (b && b.bank_name !== '') {
+             actualBanks.push(b);
+             hasBanks = true;
+          }
+       });
+    }
+    setMfsData(mfs);
+    
+    // reset actual banks to form
+    setFormData(prev => ({
+       ...prev,
+       bank_details: actualBanks.length > 0 ? actualBanks : [{ bank_name: '', account_name: '', account_number: '', branch: '' }]
+    }));
+    
+    setShowMfsSection(hasMfs);
+
+    if (hasBanks) {
       setShowBankSection(true);
     } else {
       setShowBankSection(false);
+    setShowMfsSection(false);
+    setMfsData({ bikash: '', nagad: '', rocket: '', upay: '' });
     }
     
     const emps = contact.contact_employees || [];
@@ -247,10 +311,28 @@ export default function ContactsTypePage() {
     <div className="pb-10">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">{displayTitle} Management</h1>
-        <button onClick={() => { if (showForm) resetForm(); else setShowForm(true); }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-semibold shadow-sm transition">
-          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? 'Cancel' : `Add ${singularType}`}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="bg-white border border-gray-200 rounded-lg p-1 flex items-center shadow-sm">
+            <button 
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+              title="Table View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setViewMode('card')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+              title="Card View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+          <button onClick={() => { if (showForm) resetForm(); else setShowForm(true); }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-semibold shadow-sm transition">
+            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showForm ? 'Cancel' : `Add ${singularType}`}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -392,7 +474,21 @@ export default function ContactsTypePage() {
                         <div className="flex-1 w-full flex flex-col gap-3">
                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                              <input type="text" value={p.name} onChange={e => updatePersonnel(pIdx, 'name', e.target.value)} placeholder="Employee Name" className="border border-gray-200 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                             <input type="text" value={p.position} onChange={e => updatePersonnel(pIdx, 'position', e.target.value)} placeholder="Position (e.g. Manager)" className="border border-gray-200 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                             <select value={p.position} onChange={e => updatePersonnel(pIdx, 'position', e.target.value)} className="border border-gray-200 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white appearance-none">
+                                <option value="" disabled>Select Position</option>
+                                <option value="Owner">Owner</option>
+                                <option value="Manager">Manager</option>
+                                <option value="Procurement">Procurement</option>
+                                <option value="Finance/Accounting">Finance/Accounting</option>
+                                <option value="Sales Representative">Sales Representative</option>
+                                <option value="Technical Support">Technical Support</option>
+                                <option value="Employee">Employee</option>
+                                <option value="General Staff">General Staff</option>
+                                <option value="Other">Other</option>
+                                {p.position && !['Owner', 'Manager', 'Procurement', 'Finance/Accounting', 'Sales Representative', 'Technical Support', 'Employee', 'General Staff', 'Other'].includes(p.position) && (
+                                  <option value={p.position}>{p.position} (Legacy)</option>
+                                )}
+                             </select>
                            </div>
                            
                            <div className="flex flex-col gap-2 border-l-2 border-indigo-100 pl-3">
@@ -524,8 +620,38 @@ export default function ContactsTypePage() {
                     </div>
                  )}
               </div>
+               {/* MFS Section */}
+               <div className="border-t border-gray-100 pt-6">
+                  <label className="flex items-center gap-3 cursor-pointer mb-3 p-3 border border-gray-200 rounded-xl hover:bg-emerald-50 transition w-full md:w-max">
+                    <input type="checkbox" checked={showMfsSection} onChange={e => setShowMfsSection(e.target.checked)} className="w-5 h-5 text-emerald-600 rounded accent-emerald-600" />
+                    <span className="font-bold text-gray-800 flex items-center gap-2"><CreditCard className="w-4 h-4 text-emerald-600"/> Add Mobile Financial Accounts (MFS)</span>
+                  </label>
+                  {showMfsSection && (
+                     <div className="animate-in fade-in slide-in-from-top-2 mt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-gradient-to-br from-emerald-50 to-teal-50 p-6 rounded-2xl border border-emerald-100">
+                           <div>
+                             <label className="block text-xs font-bold mb-1.5 uppercase tracking-wider" style={{color:'#e91e8c'}}>Bikash Number</label>
+                             <input type="text" value={mfsData.bikash} onChange={e => setMfsData({...mfsData, bikash: e.target.value})} className="w-full border border-pink-200 rounded-lg p-3 outline-none focus:border-pink-500 bg-white font-mono text-sm placeholder:text-gray-300" placeholder="+8801..." />
+                           </div>
+                           <div>
+                             <label className="block text-xs font-bold text-orange-600 mb-1.5 uppercase tracking-wider">Nagad Number</label>
+                             <input type="text" value={mfsData.nagad} onChange={e => setMfsData({...mfsData, nagad: e.target.value})} className="w-full border border-orange-200 rounded-lg p-3 outline-none focus:border-orange-500 bg-white font-mono text-sm placeholder:text-gray-300" placeholder="+8801..." />
+                           </div>
+                           <div>
+                             <label className="block text-xs font-bold text-purple-600 mb-1.5 uppercase tracking-wider">Rocket Number</label>
+                             <input type="text" value={mfsData.rocket} onChange={e => setMfsData({...mfsData, rocket: e.target.value})} className="w-full border border-purple-200 rounded-lg p-3 outline-none focus:border-purple-500 bg-white font-mono text-sm placeholder:text-gray-300" placeholder="+8801..." />
+                           </div>
+                           <div>
+                             <label className="block text-xs font-bold text-blue-600 mb-1.5 uppercase tracking-wider">Upay Number</label>
+                             <input type="text" value={mfsData.upay} onChange={e => setMfsData({...mfsData, upay: e.target.value})} className="w-full border border-blue-200 rounded-lg p-3 outline-none focus:border-blue-500 bg-white font-mono text-sm placeholder:text-gray-300" placeholder="+8801..." />
+                           </div>
+                        </div>
+                     </div>
+                  )}
+               </div>
             </div>
           </div>
+
 
           <div className="flex gap-4 items-center justify-end border-t border-gray-100 pt-5 mt-2">
             <button type="button" onClick={resetForm} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
@@ -536,7 +662,8 @@ export default function ContactsTypePage() {
         </form>
       )}
 
-      {/* Main Data Table */}
+      {/* Main Data Display */}
+      {viewMode === 'table' ? (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -562,7 +689,7 @@ export default function ContactsTypePage() {
                     <div>
                       <span className="font-bold text-gray-900 block text-base">{contact.name}</span>
                       {contact.shop_name && (
-                        <span className="inline-flex items-center gap-1.5 mt-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                        <span className="inline-flex items-center gap-1.5 mt-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
                           <Building2 className="w-3 h-3" /> {contact.shop_name}
                         </span>
                       )}
@@ -583,10 +710,10 @@ export default function ContactsTypePage() {
                         </div>
                       ))
                     ) : (
-                      <>
+                      <div className="flex flex-col gap-0.5">
                         {contact.phone && <span className="flex items-center gap-2 text-gray-800 font-semibold"><Phone className="w-3.5 h-3.5 text-gray-400" /> {contact.phone}</span>}
                         {contact.whatsapp && <span className="flex items-center gap-2 text-gray-800 font-semibold"><MessageSquare className="w-3.5 h-3.5 text-green-500" /> {contact.whatsapp}</span>}
-                      </>
+                      </div>
                     )}
                     {contact.email && <span className="flex items-center gap-2 text-gray-500 mt-1"><Mail className="w-3.5 h-3.5 text-gray-400" /> {contact.email}</span>}
                   </div>
@@ -629,6 +756,97 @@ export default function ContactsTypePage() {
           </tbody>
         </table>
       </div>
+      ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+         {contacts.map(contact => (
+            <div key={contact.id} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col hover:shadow-xl hover:shadow-indigo-500/5 transition-all hover:-translate-y-1">
+               <div className="flex justify-between items-start mb-5">
+                  <div className="flex items-center gap-4">
+                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 flex items-center justify-center overflow-hidden border border-indigo-100/50 shadow-inner shrink-0">
+                       {contact.photo_url ? (
+                         <img src={contact.photo_url} alt={contact.name} className="w-full h-full object-cover" />
+                       ) : (
+                         <span className="text-indigo-600 font-extrabold text-xl">{contact.name.charAt(0).toUpperCase()}</span>
+                       )}
+                     </div>
+                     <div>
+                       <h3 className="font-extrabold text-gray-900 text-lg leading-tight line-clamp-1" title={contact.name}>{contact.name}</h3>
+                       {contact.shop_name && (
+                         <span className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 uppercase tracking-wide line-clamp-1" title={contact.shop_name}>
+                           <Building2 className="w-3 h-3" /> {contact.shop_name}
+                         </span>
+                       )}
+                     </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                     <button onClick={() => setViewingContact(contact)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors" title="View Profile">
+                       <Eye className="w-5 h-5" />
+                     </button>
+                  </div>
+               </div>
+               
+               <div className="flex-1 space-y-4 mb-5">
+                  <div className="flex flex-col gap-2.5 text-sm bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                    {contact.phone_numbers && contact.phone_numbers.length > 0 ? (
+                      contact.phone_numbers.map((pn: any, i: number) => (
+                        <div key={i} className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="flex items-center gap-2.5 text-gray-800 font-bold"><Phone className="w-4 h-4 text-indigo-400" /> {pn.number}</span>
+                          <div className="flex gap-1.5">
+                            {pn.is_whatsapp && <span className="text-[10px] font-extrabold text-green-600 bg-green-100 px-1.5 py-0.5 rounded uppercase">WA</span>}
+                            {pn.is_imo && <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded uppercase">imo</span>}
+                            {pn.is_telegram && <span className="text-[10px] font-extrabold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase">TG</span>}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex flex-col gap-2.5">
+                        {contact.phone && <span className="flex items-center gap-2.5 text-gray-800 font-bold"><Phone className="w-4 h-4 text-indigo-400" /> {contact.phone}</span>}
+                        {contact.whatsapp && <span className="flex items-center gap-2.5 text-gray-800 font-bold"><MessageSquare className="w-4 h-4 text-green-500" /> {contact.whatsapp}</span>}
+                      </div>
+                    )}
+                    {contact.email && <span className="flex items-center gap-2.5 text-gray-600 pt-2.5 border-t border-gray-200/60 font-semibold break-all"><Mail className="w-4 h-4 text-orange-400 shrink-0" /> {contact.email}</span>}
+                  </div>
+
+                  <div className="flex items-start gap-2.5 text-sm text-gray-600 px-2">
+                    <MapPin className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className={contact.address ? "line-clamp-2 leading-relaxed font-medium" : "italic text-gray-400 font-medium"} title={contact.address}>
+                       {contact.address || 'No address provided'}
+                    </span>
+                  </div>
+               </div>
+
+               <div className="pt-5 border-t border-gray-100 flex items-center justify-between">
+                  {contact.contact_employees?.length > 0 ? (
+                     <span className="text-xs font-bold text-gray-700 bg-gray-100 px-3 py-1 rounded-lg flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-gray-500"/> {contact.contact_employees.length} Employee{contact.contact_employees.length !== 1 && 's'}
+                     </span>
+                  ) : (
+                     <span className="text-xs text-gray-400 italic font-medium">No employees</span>
+                  )}
+                  
+                  <div className="flex gap-1.5">
+                     <button onClick={() => handleEdit(contact)} className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100" title="Edit">
+                       <Pencil className="w-4 h-4" />
+                     </button>
+                     <button onClick={() => handleDelete(contact.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="Delete">
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                  </div>
+               </div>
+            </div>
+         ))}
+         
+         {contacts.length === 0 && (
+            <div className="col-span-full py-20 text-center bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-200">
+               <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
+                  <UserCircle2 className="w-10 h-10 text-gray-300" />
+               </div>
+               <h3 className="text-xl font-extrabold text-gray-900 mb-2">No {displayTitle} Found</h3>
+               <p className="text-gray-500 font-medium">Click "Add {singularType}" to start creating your contact directory.</p>
+            </div>
+         )}
+      </div>
+      )}
 
       {/* View Profile Modal */}
       {viewingContact && (
@@ -658,7 +876,15 @@ export default function ContactsTypePage() {
                  </div>
                </div>
                
-               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+               <div className="flex gap-4 border-b border-gray-200 mb-8">
+                  <button onClick={() => setModalTab('profile')} className={`px-6 py-3 font-extrabold text-sm border-b-2 transition-colors ${modalTab === 'profile' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Profile Information</button>
+                  <button onClick={() => setModalTab('ledger')} className={`px-6 py-3 font-extrabold text-sm border-b-2 transition-colors flex items-center gap-2 ${modalTab === 'ledger' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
+                     <Activity className="w-4 h-4"/> Len Den (Ledger)
+                  </button>
+               </div>
+               
+               {modalTab === 'profile' ? (
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
                   {/* Left Column (Details & Bank) */}
                   <div className="space-y-6">
                      <div className="bg-white border border-gray-200 p-6 rounded-3xl shadow-sm">
@@ -772,6 +998,72 @@ export default function ContactsTypePage() {
                      </div>
                   </div>
                </div>
+               ) : (
+               <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-sm min-h-[400px] animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                     <h4 className="font-extrabold text-gray-900 text-xl flex items-center gap-3"><Activity className="w-6 h-6 text-indigo-500"/> Transaction History</h4>
+                     {/* Summary Badges */}
+                     <div className="flex gap-3">
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2 text-center shadow-sm">
+                           <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Total Invoiced</p>
+                           <p className="font-extrabold text-blue-900">৳ {transactions.invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-2 text-center shadow-sm">
+                           <p className="text-[10px] font-bold text-green-500 uppercase tracking-wider mb-0.5">Total Paid</p>
+                           <p className="font-extrabold text-green-900">৳ {transactions.payments.reduce((sum, pay) => sum + (Number(pay.amount) || 0), 0).toLocaleString()}</p>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  {transactions.loading ? (
+                     <div className="text-center py-20 flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border border-gray-100">
+                        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+                        <p className="text-gray-500 font-bold">Loading transactions...</p>
+                     </div>
+                  ) : transactions.invoices.length > 0 || transactions.payments.length > 0 ? (
+                     <div className="space-y-4">
+                        {[
+                          ...transactions.invoices.map(inv => ({ ...inv, _itemType: 'invoice', sortDate: new Date(inv.date).getTime() })),
+                          ...transactions.payments.map(pay => ({ ...pay, _itemType: 'payment', sortDate: new Date(pay.date).getTime() }))
+                        ].sort((a, b) => b.sortDate - a.sortDate).map((item, idx) => (
+                           <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-md transition-all group gap-4">
+                              <div className="flex items-center gap-4">
+                                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${item._itemType === 'invoice' ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 text-blue-600' : 'bg-gradient-to-br from-emerald-50 to-green-50 border-green-100 text-green-600'}`}>
+                                    {item._itemType === 'invoice' ? <Receipt className="w-6 h-6"/> : <Banknote className="w-6 h-6"/>}
+                                 </div>
+                                 <div>
+                                    <p className="font-extrabold text-gray-900 text-base md:text-lg flex items-center gap-2.5 flex-wrap">
+                                       {item._itemType === 'invoice' ? `Invoice #${item.id.substring(0,8).toUpperCase()}` : `Payment ${item.method ? `(${item.method.replace('_', ' ')})` : ''}`}
+                                       <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md ${item.type === 'buy' ? 'bg-indigo-100 text-indigo-700' : item.type === 'sell' ? 'bg-emerald-100 text-emerald-700' : item.type === 'return' ? 'bg-orange-100 text-orange-700' : item.type === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                          {item.type}
+                                       </span>
+                                    </p>
+                                    <p className="text-sm text-gray-500 font-bold mt-1">{new Date(item.date).toLocaleDateString()}</p>
+                                 </div>
+                              </div>
+                              <div className="text-left sm:text-right">
+                                 <p className={`font-extrabold text-xl md:text-2xl ${item._itemType === 'payment' ? 'text-green-600 group-hover:text-green-700' : 'text-slate-900 group-hover:text-blue-700'} transition-colors`}>
+                                    {item._itemType === 'payment' ? '+' : ''}৳ {Number(item.total || item.amount).toLocaleString()}
+                                 </p>
+                                 {item._itemType === 'invoice' && item.payment_status && (
+                                    <p className={`text-[10px] font-extrabold uppercase mt-1.5 ${item.payment_status === 'paid' ? 'text-green-600 bg-green-50 inline-block px-2 py-0.5 rounded' : item.payment_status === 'partial' ? 'text-orange-600 bg-orange-50 inline-block px-2 py-0.5 rounded' : 'text-red-600 bg-red-50 inline-block px-2 py-0.5 rounded'}`}>
+                                       {item.payment_status}
+                                    </p>
+                                 )}
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  ) : (
+                     <div className="text-center py-24 bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
+                        <Activity className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h3 className="font-extrabold text-gray-900 text-lg">No transactions yet</h3>
+                        <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">This contact doesn't have any recorded invoices or payments in the system.</p>
+                     </div>
+                  )}
+               </div>
+               )}
             </div>
           </div>
         </div>

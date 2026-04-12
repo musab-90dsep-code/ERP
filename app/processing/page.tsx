@@ -1,10 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { handleSupabaseError } from '@/lib/supabase-utils';
-import { Settings, Plus, Send, Download, Truck, Package, Box, Calendar, UserCheck, Hash, LogIn, LogOut, Ticket, PenTool, X } from 'lucide-react';
+import { Settings, Plus, Send, Download, Truck, Package, Box, Calendar, UserCheck, Hash, Ticket, PenTool, X, Trash2, Eye } from 'lucide-react';
 
 export default function ProcessingPage() {
   return (
@@ -12,6 +12,12 @@ export default function ProcessingPage() {
       <ProcessingContent />
     </Suspense>
   );
+}
+
+interface ProductItem {
+  product_id: string;
+  quantity: string;
+  process_type: string;
 }
 
 function ProcessingContent() {
@@ -30,16 +36,19 @@ function ProcessingContent() {
   const generateMemoNo = () => `MEMO-${Math.floor(100000 + Math.random() * 900000)}`;
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [processorId, setProcessorId] = useState('');
-  const [productId, setProductId] = useState('');
-  const [quantity, setQuantity] = useState('');
   const [memoNo, setMemoNo] = useState('');
-  const [processType, setProcessType] = useState('');
   const [note, setNote] = useState('');
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [authorizedSignature, setAuthorizedSignature] = useState('');
   const [receivedBy, setReceivedBy] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [viewingLog, setViewingLog] = useState<any | null>(null);
+
+  // Multiple product items
+  const [items, setItems] = useState<ProductItem[]>([
+    { product_id: '', quantity: '', process_type: '' }
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -50,7 +59,7 @@ function ProcessingContent() {
     const tab = searchParams.get('tab');
     if (tab === 'issued' || tab === 'received') {
       setActiveTab(tab as 'issued' | 'received');
-      setQuantity('');
+      setItems([{ product_id: '', quantity: '', process_type: '' }]);
       setMemoNo(generateMemoNo());
     }
   }, [searchParams]);
@@ -60,36 +69,30 @@ function ProcessingContent() {
   }, [activeTab]);
 
   const fetchData = async () => {
-    // 1. Fetch Processors
-    const { data: procData, error: procErr } = await supabase
+    const { data: procData } = await supabase
       .from('contacts')
       .select('id, name, shop_name')
       .eq('type', 'processor');
-    if (procErr) console.error(procErr);
-    else setProcessors(procData || []);
+    setProcessors(procData || []);
 
-    // 2. Fetch Products
-    const { data: prodData, error: prodErr } = await supabase
+    const { data: prodData } = await supabase
       .from('products')
       .select('id, name, unit, stock_quantity, category, processing_price_auto, processing_price_manual')
       .eq('use_for_processing', true);
-    if (prodErr) console.error(prodErr);
-    else setProducts(prodData || []);
+    setProducts(prodData || []);
 
-    // 3. Fetch Employees
-    const { data: empData, error: empErr } = await supabase
+    const { data: empData } = await supabase
       .from('employees')
       .select('id, name, is_authorizer')
       .order('name');
-    if (empErr) console.error(empErr);
-    else setEmployees(empData || []);
+    setEmployees(empData || []);
   };
 
   const fetchLogs = async () => {
     const { data, error } = await supabase
       .from('processing_orders')
       .select(`
-        id, created_at, type, quantity, date, process_type, note, photo_urls, unit_cost, total_cost,
+        id, created_at, type, quantity, date, process_type, note, photo_urls, unit_cost, total_cost, memo_no,
         contacts ( name, shop_name ),
         products ( name, unit )
       `)
@@ -103,44 +106,52 @@ function ProcessingContent() {
     }
   };
 
+  const addItem = () => setItems([...items, { product_id: '', quantity: '', process_type: '' }]);
+  
+  const removeItem = (index: number) => {
+    if (items.length === 1) return;
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const updateItem = (index: number, field: keyof ProductItem, value: string) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    setItems(newItems);
+  };
+
+  const getProduct = (id: string) => products.find(p => p.id === id);
+
+  const getUnitCost = (item: ProductItem) => {
+    const prod = getProduct(item.product_id);
+    if (!prod || !item.process_type) return 0;
+    return item.process_type === 'auto'
+      ? Number(prod.processing_price_auto || 0)
+      : Number(prod.processing_price_manual || 0);
+  };
+
+  const getItemTotal = (item: ProductItem) => {
+    return Number(item.quantity || 0) * getUnitCost(item);
+  };
+
+  const grandTotal = items.reduce((acc, item) => acc + getItemTotal(item), 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!processorId || !productId || !quantity || Number(quantity) <= 0 || !authorizedSignature || !receivedBy) {
-      alert('Please fill out all required fields correctly. (Process Type and Notes are optional)');
+
+    // Validate all items
+    const validItems = items.filter(item => item.product_id && Number(item.quantity) > 0);
+    if (validItems.length === 0) {
+      alert('Please add at least one valid product with a quantity.');
+      return;
+    }
+    if (!processorId || !authorizedSignature || !receivedBy) {
+      alert('Please fill out all required fields (Processor, Authorized Signature, Received By).');
       return;
     }
 
     setSubmitting(true);
     try {
-      const numericQuantity = Number(quantity);
-
-      // 1. Fetch the exact current stock to prevent race conditions as best as possible without RPC
-      const { data: currentProduct, error: fetchErr } = await supabase
-        .from('products')
-        .select('stock_quantity')
-        .eq('id', productId)
-        .single();
-        
-      if (fetchErr) throw fetchErr;
-
-      let newStock = Number(currentProduct.stock_quantity || 0);
-
-      // If grouping: Issue means stock goes DOWN (we give to processor). Received means stock goes UP.
-      if (activeTab === 'issued') {
-        newStock = newStock - numericQuantity;
-      } else {
-        newStock = newStock + numericQuantity;
-      }
-
-      // 2. Update stock
-      const { error: updateErr } = await supabase
-        .from('products')
-        .update({ stock_quantity: newStock })
-        .eq('id', productId);
-      
-      if (updateErr) throw updateErr;
-
-      // 3. Upload images
+      // 1. Upload images
       const uploadedUrls: string[] = [];
       for (const file of photoFiles) {
         const path = `processing/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
@@ -151,41 +162,51 @@ function ProcessingContent() {
         }
       }
 
-      const unitCost = processType === 'auto' ? Number(selectedProductObj?.processing_price_auto || 0) : processType === 'manual' ? Number(selectedProductObj?.processing_price_manual || 0) : 0;
-      const totalCost = numericQuantity * unitCost;
+      // 2. Process each item
+      for (const item of validItems) {
+        const numericQuantity = Number(item.quantity);
+        const prod = getProduct(item.product_id);
+        if (!prod) continue;
 
-      const payload = {
-        type: activeTab,
-        memo_no: memoNo,
-        processor_id: processorId,
-        product_id: productId,
-        quantity: numericQuantity,
-        date: date,
-        authorized_signature: authorizedSignature,
-        received_by: receivedBy,
-        process_type: processType || null,
-        note: note || null,
-        unit_cost: unitCost,
-        total_cost: totalCost,
-        photo_urls: uploadedUrls.length > 0 ? uploadedUrls : undefined
-      };
+        // Update stock
+        let newStock = Number(prod.stock_quantity || 0);
+        newStock = activeTab === 'issued' ? newStock - numericQuantity : newStock + numericQuantity;
+        await supabase.from('products').update({ stock_quantity: newStock }).eq('id', item.product_id);
 
-      const { error: insertErr } = await supabase
-        .from('processing_orders')
-        .insert([payload]);
+        const unitCost = item.process_type === 'auto'
+          ? Number(prod.processing_price_auto || 0)
+          : item.process_type === 'manual' ? Number(prod.processing_price_manual || 0) : 0;
+        const totalCost = numericQuantity * unitCost;
 
-      if (insertErr) throw insertErr;
+        const payload = {
+          type: activeTab,
+          memo_no: memoNo,
+          processor_id: processorId,
+          product_id: item.product_id,
+          quantity: numericQuantity,
+          date: date,
+          authorized_signature: authorizedSignature,
+          received_by: receivedBy,
+          process_type: item.process_type || null,
+          note: note || null,
+          unit_cost: unitCost,
+          total_cost: totalCost,
+          photo_urls: uploadedUrls.length > 0 ? uploadedUrls : undefined
+        };
 
-      // Finish up
-      setQuantity('');
-      setProcessType('');
+        const { error: insertErr } = await supabase.from('processing_orders').insert([payload]);
+        if (insertErr) throw insertErr;
+      }
+
+      // Reset form
+      setItems([{ product_id: '', quantity: '', process_type: '' }]);
       setNote('');
       setPhotoFiles([]);
       setPhotoPreviews([]);
       setMemoNo(generateMemoNo());
       setAuthorizedSignature('');
       setReceivedBy('');
-      fetchData(); // refresh product stocks
+      fetchData();
       fetchLogs();
     } catch (error) {
       console.error(error);
@@ -212,9 +233,6 @@ function ProcessingContent() {
     setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  // derived values for selected product
-  const selectedProductObj = products.find(p => p.id === productId);
-
   return (
     <div className="pb-10 font-sans animate-in fade-in duration-300">
       {/* Header */}
@@ -230,8 +248,6 @@ function ProcessingContent() {
           </p>
         </div>
       </div>
-
-      {/* Tabs handled by sidebar navigation now */}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Form Action */}
@@ -269,58 +285,116 @@ function ProcessingContent() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><Box className="w-4 h-4 text-gray-400" /> Select Product</label>
-                <select required value={productId} onChange={e => setProductId(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-medium text-sm text-gray-800 bg-gray-50 hover:bg-white appearance-none">
-                  <option value="" disabled>-- Choose a product --</option>
-                  {products.map(pr => (
-                     <option key={pr.id} value={pr.id}>{pr.name} (In stock: {pr.stock_quantity} {pr.unit || 'pcs'})</option>
-                  ))}
-                </select>
-                {selectedProductObj && (
-                  <p className="text-xs font-semibold mt-2 px-3 py-1.5 rounded-md bg-slate-100 text-slate-600 block w-max">
-                     Current Stock: <span className="text-slate-900">{selectedProductObj.stock_quantity} {selectedProductObj.unit || 'pcs'}</span>
-                  </p>
-                )}
-              </div>
+              {/* Multiple Product Items — only for Issued tab */}
+              {activeTab === 'issued' && <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2"><Box className="w-4 h-4 text-gray-400" /> Products</label>
+                  {activeTab === 'issued' && (
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Add Product
+                  </button>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><Hash className="w-4 h-4 text-gray-400" /> {activeTab === 'issued' ? 'Issue' : 'Receive'} Quantity</label>
-                <div className="relative">
-                  <input required type="number" min="0.01" step="0.01" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0.00" className="w-full pl-3 pr-12 py-2.5 border border-gray-200 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-slate-800 transition-all text-gray-900 bg-gray-50 hover:bg-white" />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold uppercase tracking-wide">
-                     {selectedProductObj?.unit || 'Unit'}
-                  </div>
-                </div>
-              </div>
+                <div className="flex flex-col gap-3">
+                  {items.map((item, idx) => {
+                    const prod = getProduct(item.product_id);
+                    return (
+                      <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col gap-2.5 relative">
+                        {/* Remove button */}
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(idx)}
+                            className="absolute top-2 right-2 text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><Settings className="w-4 h-4 text-gray-400" /> Process Type (Optional)</label>
-                  <select value={processType} onChange={e => setProcessType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-medium text-sm text-gray-800 bg-gray-50 hover:bg-white appearance-none">
-                    <option value="">-- Let system decide / Not specified --</option>
-                    <option value="auto">Auto</option>
-                    <option value="manual">Manual</option>
-                  </select>
+                        <div className="pr-7">
+                          <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Product</label>
+                          <select
+                            required
+                            value={item.product_id}
+                            onChange={e => updateItem(idx, 'product_id', e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg p-2 outline-none focus:ring-2 focus:ring-slate-800 text-sm font-medium text-gray-800 bg-white appearance-none"
+                          >
+                            <option value="" disabled>-- Choose product --</option>
+                            {products.map(pr => (
+                               <option key={pr.id} value={pr.id}>{pr.name} (Stock: {pr.stock_quantity} {pr.unit || 'pcs'})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Quantity</label>
+                            <div className="relative">
+                              <input
+                                required
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={item.quantity}
+                                onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                                placeholder="0.00"
+                                className="w-full pl-2 pr-8 py-2 border border-gray-200 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-slate-800 text-gray-900 bg-white"
+                              />
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold uppercase">
+                                {prod?.unit || 'U'}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Process Type</label>
+                            <select
+                              value={item.process_type}
+                              onChange={e => updateItem(idx, 'process_type', e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg p-2 outline-none focus:ring-2 focus:ring-slate-800 text-sm font-medium text-gray-800 bg-white appearance-none"
+                            >
+                              <option value="">None</option>
+                              <option value="auto">Auto</option>
+                              <option value="manual">Manual</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Cost display */}
+                        {prod && item.process_type && Number(item.quantity) > 0 && (
+                          <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-2.5 flex justify-between items-center animate-in fade-in">
+                            <div>
+                              <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Unit Cost</p>
+                              <p className="font-extrabold text-indigo-900 text-sm">৳ {getUnitCost(item).toFixed(2)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Total Est.</p>
+                              <p className="font-extrabold text-indigo-900 text-sm">৳ {getItemTotal(item).toFixed(2)}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                
-                {processType && selectedProductObj && (
-                  <div className="md:col-span-2 bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex justify-between items-center transition-all animate-in fade-in">
-                     <div>
-                       <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">Unit Processing Cost</span>
-                       <span className="text-lg font-extrabold text-indigo-900">৳ {(processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0)).toFixed(2)}</span>
-                     </div>
-                     <div className="text-right">
-                       <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">Total Est. Cost</span>
-                       <span className="text-xl font-extrabold text-indigo-900">৳ {(Number(quantity || 0) * (processType === 'auto' ? Number(selectedProductObj.processing_price_auto || 0) : Number(selectedProductObj.processing_price_manual || 0))).toFixed(2)}</span>
-                     </div>
+
+                {/* Grand total if more than 1 item */}
+                {items.length > 1 && grandTotal > 0 && (
+                  <div className="bg-slate-800 text-white rounded-xl p-3.5 flex justify-between items-center animate-in fade-in">
+                    <span className="font-bold text-sm text-slate-300">{items.filter(i => i.product_id).length} Product(s) · Grand Total</span>
+                    <span className="font-extrabold text-lg">৳ {grandTotal.toLocaleString()}</span>
                   </div>
                 )}
-                
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><PenTool className="w-4 h-4 text-gray-400" /> Note (Optional)</label>
-                  <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Add any special instructions or notes..." className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-medium text-sm text-gray-800 bg-gray-50 hover:bg-white resize-none" />
-                </div>
+              </div>}
+
+              {/* Note */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-2"><PenTool className="w-4 h-4 text-gray-400" /> Note (Optional)</label>
+                <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Add any special instructions or notes..." className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-medium text-sm text-gray-800 bg-gray-50 hover:bg-white resize-none" />
               </div>
 
               <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
@@ -356,18 +430,23 @@ function ProcessingContent() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-2"><UserCheck className="w-4 h-4 text-emerald-500" /> Received By</label>
-                  <select required value={receivedBy} onChange={e => setReceivedBy(e.target.value)} className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-bold text-sm text-gray-800 bg-gray-50 hover:bg-white appearance-none">
-                     <option value="" disabled>-- Select Employee --</option>
-                     {employees.map(emp => (
-                        <option key={`rec-${emp.id}`} value={emp.name}>{emp.name}</option>
-                     ))}
-                  </select>
+                  <input
+                    required
+                    type="text"
+                    value={receivedBy}
+                    onChange={e => setReceivedBy(e.target.value)}
+                    placeholder="Enter receiver's name..."
+                    className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-800 transition-all font-bold text-sm text-gray-800 bg-gray-50 hover:bg-white"
+                  />
                 </div>
               </div>
 
               <div className="pt-2 mt-2">
                 <button type="submit" disabled={submitting} className={`w-full py-3 rounded-xl font-bold text-white shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 ${activeTab === 'issued' ? 'bg-orange-600 hover:bg-orange-700 hover:shadow-orange-200' : 'bg-green-600 hover:bg-green-700 hover:shadow-green-200'}`}>
-                  {submitting ? 'Processing...' : activeTab === 'issued' ? 'Confirm Issue Material' : 'Confirm Receive Material'}
+                  {submitting
+                    ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Saving...</>
+                    : activeTab === 'issued' ? 'Confirm Issue Material' : 'Confirm Receive Material'
+                  }
                 </button>
               </div>
             </form>
@@ -441,7 +520,7 @@ function ProcessingContent() {
                        ))}
                        {logs.length === 0 && (
                           <tr>
-                             <td colSpan={5} className="px-6 py-16 text-center text-gray-400">
+                             <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
                                 <Truck className="w-12 h-12 mx-auto text-gray-200 mb-3" />
                                 <span className="block font-medium text-gray-500">No {activeTab} material logs found.</span>
                                 <span className="block text-sm mt-1">Submit the form on the left to record your first transaction.</span>
@@ -452,6 +531,74 @@ function ProcessingContent() {
                  </table>
               </div>
            </div>
+        </div>
+      </div>
+    {viewingLog && <ProcessingLogModal log={viewingLog} onClose={() => setViewingLog(null)} />}
+    </div>
+  );
+}
+
+function ProcessingLogModal({ log, onClose }: { log: any, onClose: () => void }) {
+  const isIssued = log.type === 'issued';
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+        <div className={`h-24 relative rounded-t-2xl ${isIssued ? 'bg-gradient-to-r from-orange-600 to-amber-500' : 'bg-gradient-to-r from-green-600 to-emerald-500'}`}>
+          <button onClick={onClose} className="absolute top-4 right-4 text-white bg-black/20 hover:bg-black/30 p-1.5 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+          <div className="absolute bottom-4 left-6">
+            <span className={`text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider ${isIssued ? 'bg-orange-900/30 text-orange-100' : 'bg-green-900/30 text-green-100'}`}>
+              {isIssued ? 'Material Issued' : 'Material Received'}
+            </span>
+          </div>
+        </div>
+        <div className="px-6 pb-6 pt-5">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h3 className="font-extrabold text-gray-900 text-xl">{log.products?.name || 'Unknown Product'}</h3>
+              <p className="text-sm text-indigo-700 font-bold mt-0.5">{log.contacts?.name || '—'} {log.contacts?.shop_name ? `(${log.contacts.shop_name})` : ''}</p>
+            </div>
+            <span className="font-mono text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded border border-gray-200">#{log.id?.split('-')[0]?.toUpperCase()}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Date</p>
+              <p className="font-bold text-gray-900">{log.date ? new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</p>
+            </div>
+            <div className={`rounded-xl p-4 border ${isIssued ? 'bg-orange-50 border-orange-100' : 'bg-green-50 border-green-100'}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isIssued ? 'text-orange-600' : 'text-green-600'}`}>Quantity</p>
+              <p className={`font-extrabold text-xl ${isIssued ? 'text-orange-800' : 'text-green-800'}`}>{isIssued ? '-' : '+'}{log.quantity} <span className="text-xs font-medium opacity-70 uppercase">{log.products?.unit || 'UNIT'}</span></p>
+            </div>
+            {log.process_type && (
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Process Type</p>
+                <p className="font-bold text-slate-800 capitalize">{log.process_type}</p>
+              </div>
+            )}
+            {log.unit_cost > 0 && (
+              <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Total Cost</p>
+                <p className="font-extrabold text-indigo-900">৳ {Number(log.total_cost || 0).toLocaleString()}</p>
+              </div>
+            )}
+          </div>
+          {log.note && (
+            <div className="mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Note</p>
+              <p className="text-sm font-medium text-gray-700">{log.note}</p>
+            </div>
+          )}
+          {log.photo_urls && log.photo_urls.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Attached Photos</p>
+              <div className="flex flex-wrap gap-2">
+                {(log.photo_urls as string[]).map((url: string, i: number) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer" className="block w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:scale-105 transition-transform">
+                    <img src={url} alt={`Photo ${i+1}`} className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

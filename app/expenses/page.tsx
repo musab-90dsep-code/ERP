@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -31,12 +31,14 @@ function ExpensesContent() {
    const [selectedExpense, setSelectedExpense] = useState<any>(null);
    const [payData, setPayData] = useState({
       price_per_unit: '',
+      payment_date: new Date().toISOString().split('T')[0],
       note: '',
       authorized_signature: ''
    });
    const [photoFiles, setPhotoFiles] = useState<File[]>([]);
    const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
    const [isSubmitting, setIsSubmitting] = useState(false);
+   const [viewingExpense, setViewingExpense] = useState<any | null>(null);
 
    useEffect(() => {
       fetchExpenses();
@@ -110,6 +112,7 @@ function ExpensesContent() {
          const { error } = await supabase.from('daily_expenses').update({
             price_per_unit: pricePerUnit,
             total_amount: totalAmount,
+            payment_date: payData.payment_date,
             note: payData.note,
             photo_urls: uploadedUrls,
             authorized_signature: payData.authorized_signature,
@@ -120,7 +123,7 @@ function ExpensesContent() {
          
          alert('Expense paid and recorded!');
          setSelectedExpense(null);
-         setPayData({ price_per_unit: '', note: '', authorized_signature: '' });
+         setPayData({ price_per_unit: '', payment_date: new Date().toISOString().split('T')[0], note: '', authorized_signature: '' });
          setPhotoFiles([]);
          setPhotoPreviews([]);
          fetchExpenses();
@@ -146,7 +149,7 @@ function ExpensesContent() {
 
    const removePhoto = (index: number) => {
       setPhotoFiles(prev => prev.filter((_, i) => i !== index));
-      setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
+      setPhotoPreviews(prev => [...prev.filter((_, i) => i !== index)]);
    };
 
    const pendingExpenses = expenses.filter(e => e.status === 'pending');
@@ -250,7 +253,7 @@ function ExpensesContent() {
                         pendingExpenses.map(e => (
                            <button 
                               key={e.id} 
-                              onClick={() => { setSelectedExpense(e); setPayData({ price_per_unit: '', note: '', authorized_signature: '' }); setPhotoFiles([]); setPhotoPreviews([]); }}
+                              onClick={() => { setSelectedExpense(e); setPayData({ price_per_unit: '', payment_date: new Date().toISOString().split('T')[0], note: '', authorized_signature: '' }); setPhotoFiles([]); setPhotoPreviews([]); }}
                               className={`w-full text-left p-4 rounded-xl border transition-all ${selectedExpense?.id === e.id ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
                            >
                               <div className="flex justify-between items-start mb-1">
@@ -283,12 +286,14 @@ function ExpensesContent() {
                                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5"><Banknote className="w-4 h-4 text-emerald-500" /> Price per Unit</label>
                                  <input required type="number" step="0.01" min="0" placeholder="0.00" value={payData.price_per_unit} onChange={e => setPayData({...payData, price_per_unit: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3 font-extrabold text-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-gray-50" />
                               </div>
-                              <div className="flex flex-col justify-end">
-                                 <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex justify-between items-center h-[54px]">
-                                    <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Total</span>
-                                    <span className="text-2xl font-black text-emerald-600">৳ {(Number(payData.price_per_unit || 0) * selectedExpense.quantity).toLocaleString()}</span>
-                                 </div>
+                              <div>
+                                 <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5"><CalendarIcon className="w-4 h-4 text-emerald-500" /> Payment Date</label>
+                                 <input required type="date" value={payData.payment_date} onChange={e => setPayData({...payData, payment_date: e.target.value})} className="w-full border border-gray-200 rounded-xl p-3 font-bold focus:ring-2 focus:ring-emerald-500 outline-none bg-gray-50" />
                               </div>
+                           </div>
+                           <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex justify-between items-center">
+                              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Total Amount</span>
+                              <span className="text-2xl font-black text-emerald-600">৳ {(Number(payData.price_per_unit || 0) * selectedExpense.quantity).toLocaleString()}</span>
                            </div>
 
                            <div>
@@ -355,6 +360,7 @@ function ExpensesContent() {
                               <th className="px-6 py-4">Item Details</th>
                               <th className="px-6 py-4">Sign & Proof</th>
                               <th className="px-6 py-4 text-right">Total Paid</th>
+                              <th className="px-6 py-4"></th>
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -366,7 +372,7 @@ function ExpensesContent() {
                                  </td>
                                  <td className="px-6 py-4">
                                     <div className="font-bold text-gray-900">{e.item_name}</div>
-                                    <div className="text-xs text-emerald-600 font-bold mt-0.5">{e.quantity} {e.unit} <span className="text-gray-400 font-normal">@ ${e.price_per_unit}</span></div>
+                                    <div className="text-xs text-emerald-600 font-bold mt-0.5">{e.quantity} {e.unit} <span className="text-gray-400 font-normal">@ ৳{e.price_per_unit}</span></div>
                                     {e.note && <div className="text-[10px] text-gray-500 mt-1 italic w-48 truncate">{e.note}</div>}
                                  </td>
                                  <td className="px-6 py-4">
@@ -387,11 +393,16 @@ function ExpensesContent() {
                                     <span className="font-black text-lg text-emerald-600">৳ {Number(e.total_amount).toLocaleString()}</span>
                                     <span className="block text-[10px] uppercase font-bold text-green-500 mt-0.5">Paid</span>
                                  </td>
+                                 <td className="px-6 py-4 text-center">
+                                    <button onClick={() => setViewingExpense(e)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="View Details">
+                                       <Eye className="w-4 h-4" />
+                                    </button>
+                                 </td>
                               </tr>
                            ))}
                            {paidExpenses.length === 0 && (
                               <tr>
-                                 <td colSpan={4} className="py-10 text-center text-gray-500 text-sm font-medium">No paid expenses yet.</td>
+                                 <td colSpan={5} className="py-10 text-center text-gray-500 text-sm font-medium">No paid expenses yet.</td>
                               </tr>
                            )}
                         </tbody>
@@ -400,6 +411,79 @@ function ExpensesContent() {
                </div>
             </div>
          )}
+         {viewingExpense && <ExpenseViewModal expense={viewingExpense} onClose={() => setViewingExpense(null)} />}
+      </div>
+   );
+}
+
+function ExpenseViewModal({ expense, onClose }: { expense: any, onClose: () => void }) {
+   return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="h-24 bg-gradient-to-r from-emerald-600 to-teal-600 relative rounded-t-2xl">
+               <button onClick={onClose} className="absolute top-4 right-4 text-white bg-black/20 hover:bg-black/30 p-1.5 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 pb-6 pt-4">
+               <div className="flex items-center gap-3 mb-5 -mt-8">
+                  <div className="w-16 h-16 bg-white border-4 border-white rounded-2xl shadow-lg flex items-center justify-center">
+                     <ReceiptText className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <div className="pt-6">
+                     <p className="font-mono text-xs text-gray-500 font-bold">{expense.invoice_no}</p>
+                     <h3 className="font-extrabold text-gray-900 text-xl">{expense.item_name}</h3>
+                  </div>
+               </div>
+               <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Receipt Date</p>
+                     <p className="font-bold text-gray-900">{expense.date ? new Date(expense.date).toLocaleDateString() : '—'}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                     <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Payment Date</p>
+                     <p className="font-bold text-emerald-900">{expense.payment_date ? new Date(expense.payment_date).toLocaleDateString() : '—'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</p>
+                     <p className="font-bold text-gray-900">{expense.quantity} <span className="text-gray-500 font-normal text-xs uppercase">{expense.unit}</span></p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Price / Unit</p>
+                     <p className="font-bold text-gray-900">৳ {Number(expense.price_per_unit).toLocaleString()}</p>
+                  </div>
+               </div>
+               <div className="bg-emerald-600 text-white rounded-xl p-4 flex justify-between items-center mb-5">
+                  <span className="font-bold text-emerald-100 text-sm">Total Amount Paid</span>
+                  <span className="font-black text-2xl">৳ {Number(expense.total_amount).toLocaleString()}</span>
+               </div>
+               {expense.authorized_signature && (
+                  <div className="flex items-center gap-2 mb-4 bg-indigo-50 px-4 py-2.5 rounded-xl border border-indigo-100">
+                     <PenTool className="w-4 h-4 text-indigo-500" />
+                     <div>
+                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Authorized By</p>
+                        <p className="font-extrabold text-indigo-900">{expense.authorized_signature}</p>
+                     </div>
+                  </div>
+               )}
+               {expense.note && (
+                  <div className="mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Note</p>
+                     <p className="text-sm font-medium text-gray-700">{expense.note}</p>
+                  </div>
+               )}
+               {expense.photo_urls && expense.photo_urls.length > 0 && (
+                  <div>
+                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Attached Photos</p>
+                     <div className="flex flex-wrap gap-2">
+                        {(expense.photo_urls as string[]).map((u: string, i: number) => (
+                           <a key={i} href={u} target="_blank" rel="noreferrer" className="block w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:scale-105 transition-transform">
+                              <img src={u} alt={`Proof ${i+1}`} className="w-full h-full object-cover" />
+                           </a>
+                        ))}
+                     </div>
+                  </div>
+               )}
+            </div>
+         </div>
       </div>
    );
 }

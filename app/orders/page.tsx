@@ -16,6 +16,7 @@ type OrderItem = {
   unit: string;
   unit_price: number;
   subtotal: number;
+  selected_head?: string;
 };
 
 type Order = {
@@ -33,7 +34,7 @@ type Order = {
 
 // ─── Status badge colours ─────────────────────────────────────────────
 const statusStyles: Record<string, string> = {
-  pending:   'bg-yellow-100 text-yellow-700',
+  pending: 'bg-yellow-100 text-yellow-700',
   confirmed: 'bg-blue-100   text-blue-700',
   delivered: 'bg-green-100  text-green-700',
   cancelled: 'bg-red-100    text-red-600',
@@ -41,36 +42,36 @@ const statusStyles: Record<string, string> = {
 
 // ─── Main content ─────────────────────────────────────────────────────
 function OrdersContent() {
-  const searchParams  = useSearchParams();
-  const router        = useRouter();
-  const tab           = searchParams.get('tab') ?? 'sales';
-  const isSales       = tab === 'sales';
-  const orderType     = isSales ? 'sales' : 'purchase';
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const tab = searchParams.get('tab') ?? 'sales';
+  const isSales = tab === 'sales';
+  const orderType = isSales ? 'sales' : 'purchase';
 
   // ── list state ──
-  const [orders,       setOrders]       = useState<Order[]>([]);
-  const [contacts,     setContacts]     = useState<any[]>([]);
-  const [products,     setProducts]     = useState<any[]>([]);
-  const [searchQuery,  setSearchQuery]  = useState('');
-  const [showForm,     setShowForm]     = useState(false);
-  const [editingId,    setEditingId]    = useState<string | null>(null);
-  const [submitting,   setSubmitting]   = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // ── view modal state ──
-  const [viewingOrder,  setViewingOrder]  = useState<Order | null>(null);
-  const [stockMap,      setStockMap]      = useState<Record<string, number>>({});
-  const [loadingStock,  setLoadingStock]  = useState(false);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
+  const [loadingStock, setLoadingStock] = useState(false);
 
   // ── form state ──
   const emptyForm = {
-    contact_id:   '',
+    contact_id: '',
     contact_name: '',
-    status:       'pending' as Order['status'],
-    date:         new Date().toISOString().slice(0, 10),
+    status: 'pending' as Order['status'],
+    date: new Date().toISOString().slice(0, 10),
   };
-  const [formData,  setFormData]  = useState(emptyForm);
+  const [formData, setFormData] = useState(emptyForm);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [itemForm,   setItemForm]   = useState<any>({
+  const [itemForm, setItemForm] = useState<any>({
     product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '',
   });
 
@@ -93,7 +94,7 @@ function OrdersContent() {
 
   const fetchProducts = async () => {
     const category = isSales ? 'finished-goods' : 'raw-materials';
-    const { data } = await supabase.from('products').select('id,name,price,cost,unit').eq('category', category);
+    const { data } = await supabase.from('products').select('id,name,price,cost,unit,product_heads').eq('category', category);
     setProducts(data ?? []);
   };
 
@@ -116,9 +117,17 @@ function OrdersContent() {
   // ── order items helpers ──
   const addItem = () => {
     if (!itemForm.product_id || itemForm.quantity <= 0) return;
+    
+    const p = products.find((x: any) => x.id === itemForm.product_id);
+    const heads = (p?.product_heads || []).filter((h: string) => h && h.trim());
+    if (heads.length > 0 && !itemForm.selected_head) {
+      alert('Please select a Head for this product before adding.');
+      return;
+    }
+
     const subtotal = itemForm.quantity * itemForm.unit_price;
     setOrderItems(prev => [...prev, { ...itemForm, subtotal }]);
-    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '' });
+    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', selected_head: '' });
   };
 
   const removeItem = (idx: number) =>
@@ -133,15 +142,22 @@ function OrdersContent() {
     // For purchase: prefer cost, fallback to price. For sales: prefer price, fallback to cost.
     const autoPrice = isSales
       ? (Number(p.price) || Number(p.cost) || 0)
-      : (Number(p.cost)  || Number(p.price) || 0);
+      : (Number(p.cost) || Number(p.price) || 0);
     setItemForm((prev: any) => ({
       ...prev,
-      product_id:   p.id,
+      product_id: p.id,
       product_name: p.name,
-      unit:         p.unit || 'pcs',
-      unit_price:   autoPrice,
+      unit: p.unit || 'pcs',
+      unit_price: autoPrice,
+      selected_head: '', // reset selected head when product changes
     }));
   };
+
+  // Heads of currently selected product in itemForm
+  const selectedProductHeads: string[] = (() => {
+    const p = products.find((x: any) => x.id === itemForm.product_id);
+    return (p?.product_heads || []).filter((h: string) => h && h.trim());
+  })();
 
   // ── submit ──
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,13 +169,13 @@ function OrdersContent() {
         contacts.find(c => c.id === formData.contact_id)?.name || '';
 
       const payload = {
-        type:         orderType,
-        contact_id:   formData.contact_id || null,
+        type: orderType,
+        contact_id: formData.contact_id || null,
         contact_name: contactLabel,
-        items:        orderItems,
-        total:        orderTotal,
-        status:       formData.status,
-        date:         formData.date,
+        items: orderItems,
+        total: orderTotal,
+        status: formData.status,
+        date: formData.date,
       };
 
       if (editingId) {
@@ -184,15 +200,15 @@ function OrdersContent() {
     setEditingId(null);
     setFormData(emptyForm);
     setOrderItems([]);
-    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '' });
+    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', selected_head: '' });
   };
 
   const handleEdit = (order: Order) => {
     setFormData({
-      contact_id:   order.contact_id ?? '',
+      contact_id: order.contact_id ?? '',
       contact_name: order.contact_name ?? '',
-      status:       order.status,
-      date:         order.date,
+      status: order.status,
+      date: order.date,
     });
     setOrderItems(order.items ?? []);
     setEditingId(order.id);
@@ -231,13 +247,14 @@ function OrdersContent() {
   const generateInvoice = (order: Order) => {
     const invoiceTab = order.type === 'sales' ? 'sell' : 'buy';
     const payload = {
-      contact_id:   order.contact_id ?? '',
+      contact_id: order.contact_id ?? '',
       contact_name: order.contact_name ?? '',
-      date:         order.date,
+      date: order.date,
       items: (order.items ?? []).map(i => ({
         product_id: i.product_id,
-        quantity:   i.quantity,
-        price:      i.unit_price,
+        quantity: i.quantity,
+        price: i.unit_price,
+        selected_head: i.selected_head || '',
       })),
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
@@ -288,11 +305,10 @@ function OrdersContent() {
                     const isPartial = inStock > 0 && inStock < ordered;
 
                     return (
-                      <div key={idx} className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                        isSufficient ? 'border-green-200 bg-green-50/40' :
-                        isPartial    ? 'border-yellow-200 bg-yellow-50/40' :
-                                       'border-red-200 bg-red-50/40'
-                      }`}>
+                      <div key={idx} className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSufficient ? 'border-green-200 bg-green-50/40' :
+                          isPartial ? 'border-yellow-200 bg-yellow-50/40' :
+                            'border-red-200 bg-red-50/40'
+                        }`}>
                         <div className="flex items-center gap-3">
                           {isSufficient ? (
                             <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
@@ -302,10 +318,13 @@ function OrdersContent() {
                             <XCircle className="w-5 h-5 text-red-500 shrink-0" />
                           )}
                           <div>
-                            <p className="font-bold text-gray-900">{item.product_name}</p>
-                            <p className="text-xs text-gray-500 font-medium mt-0.5">
-                              Unit Price: ৳ {item.unit_price} · Subtotal: ৳ {item.subtotal?.toFixed(2)}
-                            </p>
+                             <p className="font-bold text-gray-900">{item.product_name}</p>
+                             {item.selected_head && (
+                               <span className="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5 mt-0.5">{item.selected_head}</span>
+                             )}
+                             <p className="text-xs text-gray-500 font-medium mt-0.5">
+                               Unit Price: ৳ {item.unit_price} · Subtotal: ৳ {item.subtotal?.toFixed(2)}
+                             </p>
                           </div>
                         </div>
 
@@ -319,15 +338,12 @@ function OrdersContent() {
                           <span className="text-gray-400 font-bold">out of</span>
 
                           {/* In Stock badge */}
-                          <div className={`text-center rounded-xl px-4 py-2 ${
-                            isSufficient ? 'bg-green-100' : isPartial ? 'bg-yellow-100' : 'bg-red-100'
-                          }`}>
-                            <p className={`text-xs font-bold uppercase tracking-wide ${
-                              isSufficient ? 'text-green-600' : isPartial ? 'text-yellow-600' : 'text-red-500'
-                            }`}>In Stock</p>
-                            <p className={`text-xl font-black ${
-                              isSufficient ? 'text-green-700' : isPartial ? 'text-yellow-700' : 'text-red-600'
-                            }`}>{inStock} <span className="text-xs font-semibold">{item.unit}</span></p>
+                          <div className={`text-center rounded-xl px-4 py-2 ${isSufficient ? 'bg-green-100' : isPartial ? 'bg-yellow-100' : 'bg-red-100'
+                            }`}>
+                            <p className={`text-xs font-bold uppercase tracking-wide ${isSufficient ? 'text-green-600' : isPartial ? 'text-yellow-600' : 'text-red-500'
+                              }`}>In Stock</p>
+                            <p className={`text-xl font-black ${isSufficient ? 'text-green-700' : isPartial ? 'text-yellow-700' : 'text-red-600'
+                              }`}>{inStock} <span className="text-xs font-semibold">{item.unit}</span></p>
                           </div>
                         </div>
                       </div>
@@ -440,7 +456,7 @@ function OrdersContent() {
               <Package className="w-4 h-4 text-indigo-500" /> Add Product
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
-              <div className="sm:col-span-2">
+              <div className={selectedProductHeads.length > 0 ? 'sm:col-span-1' : 'sm:col-span-2'}>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Product</label>
                 <select
                   value={itemForm.product_id}
@@ -448,11 +464,26 @@ function OrdersContent() {
                   className="w-full border border-gray-200 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                 >
                   <option value="">— Select Product —</option>
-                  {products.map(p => (
+                  {products.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>
+              {selectedProductHeads.length > 0 && (
+                <div className="sm:col-span-1 animate-in fade-in slide-in-from-top-1">
+                  <label className="block text-xs font-semibold text-indigo-600 mb-1">Select Head</label>
+                  <select
+                    value={itemForm.selected_head || ''}
+                    onChange={e => setItemForm({ ...itemForm, selected_head: e.target.value })}
+                    className="w-full border border-indigo-200 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400 bg-indigo-50 text-indigo-900 font-bold"
+                  >
+                    <option value="" disabled>-- Select Head --</option>
+                    {selectedProductHeads.map((h: string, hi: number) => (
+                      <option key={hi} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Quantity</label>
                 <input
@@ -489,6 +520,7 @@ function OrdersContent() {
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Product</th>
+                      <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Head</th>
                       <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Qty</th>
                       <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Unit Price</th>
                       <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Subtotal</th>
@@ -499,6 +531,11 @@ function OrdersContent() {
                     {orderItems.map((item, idx) => (
                       <tr key={idx}>
                         <td className="px-3 py-2 font-medium text-gray-800">{item.product_name}</td>
+                        <td className="px-3 py-2">
+                          {item.selected_head
+                            ? <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">{item.selected_head}</span>
+                            : <span className="text-gray-300 text-xs">—</span>}
+                        </td>
                         <td className="px-3 py-2 text-gray-600">{item.quantity} {item.unit}</td>
                         <td className="px-3 py-2 text-gray-600">৳ {item.unit_price}</td>
                         <td className="px-3 py-2 font-bold text-gray-800">৳ {item.subtotal.toFixed(2)}</td>

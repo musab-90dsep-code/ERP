@@ -1,10 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { handleSupabaseError } from '@/lib/supabase-utils';
-import { Plus, Trash2, Pencil, Search, Filter, Printer, Download, ChevronDown, Package, Image as ImageIcon, X, Upload } from 'lucide-react';
+import { Plus, Trash2, Pencil, Search, Filter, Printer, Download, ChevronDown, Package, Image as ImageIcon, X, Upload, Eye, LayoutGrid, List } from 'lucide-react';
 
 function StockContent() {
   const searchParams = useSearchParams();
@@ -12,8 +12,11 @@ function StockContent() {
   const [products, setProducts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingProduct, setViewingProduct] = useState<any | null>(null);
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [submitting, setSubmitting] = useState(false);
   const [hasBarcode, setHasBarcode] = useState(false);
+  const [showHeads, setShowHeads] = useState(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,7 +39,8 @@ function StockContent() {
     low_stock_alert: false, minimum_stock: '',
     unit: 'pcs', unit_value: 1, barcode: '', use_for_processing: false,
     processing_price_auto: '', processing_price_manual: '',
-    image_urls: [] as string[]
+    image_urls: [] as string[],
+    product_heads: [] as string[]
   });
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -146,21 +150,22 @@ function StockContent() {
 
       const payload = {
         category,
-        name:                    formData.name,
-        sku:                     finalSku,
-        price:                   formData.price === '' ? 0 : Number(formData.price),
-        cost:                    formData.cost  === '' ? 0 : Number(formData.cost),
-        stock_quantity:          formData.stock_quantity === '' ? 0 : Number(formData.stock_quantity),
-        unit:                    formData.unit || 'pcs',
-        unit_value:              formData.unit_value ? Number(formData.unit_value) : 1,
-        barcode:                 formData.barcode || null,
-        is_tracked:              !!formData.is_tracked,
-        low_stock_alert:         !!formData.low_stock_alert,
-        minimum_stock:           formData.minimum_stock === '' ? 0 : Number(formData.minimum_stock),
-        use_for_processing:      !!formData.use_for_processing,
-        processing_price_auto:   formData.processing_price_auto   === '' ? 0 : Number(formData.processing_price_auto),
+        name: formData.name,
+        sku: finalSku,
+        price: formData.price === '' ? 0 : Number(formData.price),
+        cost: formData.cost === '' ? 0 : Number(formData.cost),
+        stock_quantity: formData.stock_quantity === '' ? 0 : Number(formData.stock_quantity),
+        unit: formData.unit || 'pcs',
+        unit_value: formData.unit_value ? Number(formData.unit_value) : 1,
+        barcode: formData.barcode || null,
+        is_tracked: !!formData.is_tracked,
+        low_stock_alert: !!formData.low_stock_alert,
+        minimum_stock: formData.minimum_stock === '' ? 0 : Number(formData.minimum_stock),
+        use_for_processing: !!formData.use_for_processing,
+        processing_price_auto: formData.processing_price_auto === '' ? 0 : Number(formData.processing_price_auto),
         processing_price_manual: formData.processing_price_manual === '' ? 0 : Number(formData.processing_price_manual),
-        image_urls:              finalImageUrls,
+        image_urls: finalImageUrls,
+        product_heads: category === 'finished-goods' && formData.product_heads ? formData.product_heads.filter((h: string) => h.trim()) : [],
       };
 
       if (editingId) {
@@ -183,10 +188,12 @@ function StockContent() {
     setShowForm(false);
     setEditingId(null);
     setHasBarcode(false);
+    setShowHeads(false);
     setFormData({
       name: '', sku: '', price: '', cost: '', stock_quantity: '', is_tracked: true,
       low_stock_alert: false, minimum_stock: '',
-      unit: 'pcs', barcode: '', use_for_processing: false, processing_price_auto: '', processing_price_manual: '', image_urls: []
+      unit: 'pcs', barcode: '', use_for_processing: false, processing_price_auto: '', processing_price_manual: '', image_urls: [],
+      product_heads: []
     });
     setImageFiles([]);
     setImagePreviews([]);
@@ -207,9 +214,12 @@ function StockContent() {
       use_for_processing: product.use_for_processing ?? false,
       processing_price_auto: product.processing_price_auto ?? '',
       processing_price_manual: product.processing_price_manual ?? '',
-      image_urls: product.image_urls || []
+      image_urls: product.image_urls || [],
+      product_heads: product.product_heads || []
     });
     setHasBarcode(!!product.barcode);
+    const heads = product.product_heads || [];
+    setShowHeads(heads.length > 0);
     setImagePreviews(product.image_urls || []);
     setImageFiles([]); // Clear new files array since we are loading existing ones
     setEditingId(product.id);
@@ -245,10 +255,28 @@ function StockContent() {
           <Package className="w-6 h-6 text-indigo-600" />
           {headingTitle} Management
         </h1>
-        <button onClick={() => { if (!showForm) resetEmpForm(); setShowForm(!showForm); }}
-          className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-semibold shadow-sm transition-colors">
-          <Plus className="w-4 h-4" /> Add Product
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="bg-white border border-gray-200 rounded-lg p-1 flex items-center shadow-sm">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+              title="Table View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('card')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+              title="Card View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+          <button onClick={() => { if (!showForm) resetEmpForm(); setShowForm(!showForm); }}
+            className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-semibold shadow-sm transition-colors">
+            <Plus className="w-4 h-4" /> Add Product
+          </button>
+        </div>
       </div>
 
       {/* ---------------- FORM SECTION ---------------- */}
@@ -369,6 +397,65 @@ function StockContent() {
               </div>
             )}
 
+            {/* Finished Goods: Product Heads Section */}
+            {!isRawMaterials && (
+              <div className="md:col-span-3 mt-2 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                <label className="flex items-center gap-3 cursor-pointer mb-1 w-max select-none">
+                  <input
+                    type="checkbox"
+                    checked={showHeads}
+                    onChange={e => {
+                      setShowHeads(e.target.checked);
+                      if (!e.target.checked) setFormData({ ...formData, product_heads: [] });
+                      else if (formData.product_heads.length === 0) setFormData({ ...formData, product_heads: [''] });
+                    }}
+                    className="w-5 h-5 accent-indigo-600"
+                  />
+                  <span className="text-sm font-bold text-indigo-800">Add Product Heads (Categories / Variants)</span>
+                </label>
+                <p className="text-xs text-indigo-500 mb-3 ml-8">e.g. Size: S, M, L — or Color: Red, Blue — or Brand: A, B</p>
+
+                {showHeads && (
+                  <div className="animate-in fade-in slide-in-from-top-2 ml-2">
+                    <div className="flex flex-col gap-2 mb-3">
+                      {formData.product_heads.map((head: string, hi: number) => (
+                        <div key={hi} className="flex items-center gap-2">
+                          <span className="text-xs font-extrabold text-indigo-400 w-5 text-right shrink-0">{hi + 1}.</span>
+                          <input
+                            type="text"
+                            placeholder="e.g. Large, Red, Premium Grade..."
+                            value={head}
+                            onChange={e => {
+                              const updated = [...formData.product_heads];
+                              updated[hi] = e.target.value;
+                              setFormData({ ...formData, product_heads: updated });
+                            }}
+                            className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm font-bold text-indigo-900 bg-white outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                          {formData.product_heads.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, product_heads: formData.product_heads.filter((_: string, i: number) => i !== hi) })}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, product_heads: [...formData.product_heads, ''] })}
+                      className="text-xs font-bold text-indigo-600 bg-white border border-indigo-200 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Another Head
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="md:col-span-3 flex justify-end gap-3 mt-4 border-t border-gray-100 pt-5">
               <button type="button" onClick={resetEmpForm} className="bg-white text-gray-700 px-6 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 font-bold transition-colors">
                 Cancel
@@ -381,65 +468,239 @@ function StockContent() {
         </form>
       )}
 
-      {/* ---------------- TABLE SECTION ---------------- */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto min-h-[300px]">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {visibleColumns.name && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Product Details</th>}
-                {!isRawMaterials && visibleColumns.sku && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">SKU</th>}
-                {visibleColumns.barcode && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Barcode</th>}
-                {visibleColumns.price && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Price</th>}
-                {visibleColumns.stock && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Stock</th>}
-                {visibleColumns.actions && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredProducts.map(product => (
-                <tr key={product.id} className="hover:bg-gray-50/50 transition-colors">
-                  {visibleColumns.name && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
-                          {product.image_urls && product.image_urls.length > 0 ? (
-                            <img src={product.image_urls[0]} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Package className="w-5 h-5 text-gray-400 m-auto mt-2.5" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-800">{product.name}</p>
-                          {product.use_for_processing && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">For Processing</span>}
-                        </div>
-                      </div>
-                    </td>
-                  )}
-                  {!isRawMaterials && visibleColumns.sku && <td className="px-6 py-4 text-sm text-gray-600">{product.sku || '-'}</td>}
-                  {visibleColumns.barcode && <td className="px-6 py-4 text-sm text-gray-600">{product.barcode || '-'}</td>}
-                  {visibleColumns.price && <td className="px-6 py-4 font-bold text-gray-900">৳ {product.price}</td>}
-                  {visibleColumns.stock && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-bold ${product.is_tracked && product.stock_quantity <= (product.minimum_stock || 0) && product.low_stock_alert ? 'text-red-600' : 'text-green-600'}`}>
-                          {product.is_tracked ? product.stock_quantity : 'N/A'}
-                        </span>
-                        <span className="text-xs text-gray-500 uppercase">{product.unit_value > 1 ? `${product.unit_value} ${product.unit}` : product.unit}</span>
-                      </div>
-                    </td>
-                  )}
-                  {visibleColumns.actions && (
-                    <td className="px-6 py-4 text-right">
-                      <button onClick={() => handleEdit(product)} className="text-gray-400 hover:text-indigo-600 p-2"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => handleDelete(product.id)} className="text-gray-400 hover:text-red-600 p-2"><Trash2 className="w-4 h-4" /></button>
-                    </td>
-                  )}
+      {/* ---------------- VIEW TOGGLE SECTION ---------------- */}
+      {viewMode === 'table' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto min-h-[300px]">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {visibleColumns.name && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Product Details</th>}
+                  {!isRawMaterials && visibleColumns.sku && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">SKU</th>}
+                  {visibleColumns.barcode && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Barcode</th>}
+                  {visibleColumns.price && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Price</th>}
+                  {visibleColumns.stock && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Stock</th>}
+                  {visibleColumns.actions && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredProducts.map(product => (
+                  <tr key={product.id} className="hover:bg-gray-50/50 transition-colors">
+                    {visibleColumns.name && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
+                            {product.image_urls && product.image_urls.length > 0 ? (
+                              <img src={product.image_urls[0]} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-5 h-5 text-gray-400 m-auto mt-2.5" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-800">{product.name}</p>
+                            {product.use_for_processing && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">For Processing</span>}
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    {!isRawMaterials && visibleColumns.sku && <td className="px-6 py-4 text-sm text-gray-600">{product.sku || '-'}</td>}
+                    {visibleColumns.barcode && <td className="px-6 py-4 text-sm text-gray-600">{product.barcode || '-'}</td>}
+                    {visibleColumns.price && <td className="px-6 py-4 font-bold text-gray-900">৳ {product.price}</td>}
+                    {visibleColumns.stock && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold ${product.is_tracked && product.stock_quantity <= (product.minimum_stock || 0) && product.low_stock_alert ? 'text-red-600' : 'text-green-600'}`}>
+                            {product.is_tracked ? product.stock_quantity : 'N/A'}
+                          </span>
+                          <span className="text-xs text-gray-500 uppercase">{product.unit_value > 1 ? `${product.unit_value} ${product.unit}` : product.unit}</span>
+                        </div>
+                      </td>
+                    )}
+                    {visibleColumns.actions && (
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => setViewingProduct(product)} className="text-gray-400 hover:text-blue-600 p-2"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => handleEdit(product)} className="text-gray-400 hover:text-indigo-600 p-2"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => handleDelete(product.id)} className="text-gray-400 hover:text-red-600 p-2"><Trash2 className="w-4 h-4" /></button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredProducts.map(product => (
+            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
+              <div className="relative aspect-video bg-gray-100 overflow-hidden flex-shrink-0">
+                {product.image_urls && product.image_urls.length > 0 ? (
+                  <img src={product.image_urls[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                  <Package className="w-12 h-12 text-gray-400 m-auto mt-8" />
+                )}
+                {product.use_for_processing && (
+                  <div className="absolute top-2 left-2 bg-indigo-600/90 backdrop-blur text-white text-[10px] px-2 py-1 rounded-md font-bold shadow-sm">
+                    For Processing
+                  </div>
+                )}
+                <div className="absolute top-2 right-2 flex gap-1 transform sm:translate-y-[-120%] sm:opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200">
+                  <button onClick={() => setViewingProduct(product)} className="bg-white/90 backdrop-blur p-1.5 rounded-md text-gray-700 hover:text-blue-600 shadow-sm"><Eye className="w-4 h-4" /></button>
+                  <button onClick={() => handleEdit(product)} className="bg-white/90 backdrop-blur p-1.5 rounded-md text-gray-700 hover:text-indigo-600 shadow-sm"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => handleDelete(product.id)} className="bg-white/90 backdrop-blur p-1.5 rounded-md text-gray-700 hover:text-red-600 shadow-sm"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+              <div className="p-4 flex flex-col flex-grow">
+                <div className="flex justify-between items-start mb-2 gap-2">
+                  <h3 className="font-bold text-gray-900 line-clamp-2 leading-tight">{product.name}</h3>
+                  <div className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-md font-bold text-sm whitespace-nowrap">
+                    ৳ {product.price}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 mb-4 flex flex-col gap-1">
+                  {!isRawMaterials && <span>SKU: {product.sku || '-'}</span>}
+                  <span>Barcode: {product.barcode || '-'}</span>
+                </div>
+
+                <div className="mt-auto pt-4 border-t border-gray-100 flex justify-between items-center">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Stock</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`font-bold ${product.is_tracked && product.stock_quantity <= (product.minimum_stock || 0) && product.low_stock_alert ? 'text-red-600' : 'text-green-600'}`}>
+                      {product.is_tracked ? product.stock_quantity : 'N/A'}
+                    </span>
+                    <span className="text-xs text-gray-500 uppercase">{product.unit_value > 1 ? `${product.unit_value} ${product.unit}` : product.unit}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {filteredProducts.length === 0 && (
+            <div className="col-span-full py-16 text-center text-gray-500 bg-white rounded-xl border border-gray-200 border-dashed">
+              <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-lg font-medium">No products found</p>
+              <p className="text-sm">Try adjusting your filters or add a new product.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---------------- VIEW MODAL ---------------- */}
+      {viewingProduct && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center flex-shrink-0">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Package className="w-5 h-5" /> Product Details
+              </h2>
+              <button
+                onClick={() => setViewingProduct(null)}
+                className="text-white/80 hover:text-white bg-indigo-700/50 hover:bg-indigo-700 p-1.5 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <div className="flex flex-col sm:flex-row gap-6 mb-6">
+                <div className="w-32 h-32 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0 shadow-sm mx-auto sm:mx-0">
+                  {viewingProduct.image_urls && viewingProduct.image_urls.length > 0 ? (
+                    <img src={viewingProduct.image_urls[0]} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="w-10 h-10 text-gray-400 m-auto mt-11" />
+                  )}
+                </div>
+                <div className="text-center sm:text-left flex-1 border-b sm:border-b-0 border-gray-100 pb-4 sm:pb-0">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-1">{viewingProduct.name}</h3>
+                  <div className="text-sm text-gray-500 mb-3 uppercase tracking-wide">
+                    {viewingProduct.category === 'raw-materials' ? 'Raw Material' : 'Finished Goods'}
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold text-lg mb-2">
+                    ৳ {viewingProduct.price}
+                  </div>
+                  {viewingProduct.use_for_processing && (
+                    <div className="mt-1">
+                      <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md font-bold inline-block">Used for Processing</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 bg-gray-50 p-5 rounded-xl border border-gray-100">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Inventory Information</h4>
+                  <ul className="space-y-3">
+                    <li className="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                      <span className="text-gray-500">SKU</span>
+                      <span className="font-semibold text-gray-900">{viewingProduct.sku || '-'}</span>
+                    </li>
+                    <li className="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                      <span className="text-gray-500">Barcode</span>
+                      <span className="font-semibold text-gray-900">{viewingProduct.barcode || '-'}</span>
+                    </li>
+                    <li className="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                      <span className="text-gray-500">Stock Quantity</span>
+                      <span className={`font-bold ${viewingProduct.is_tracked && viewingProduct.stock_quantity <= (viewingProduct.minimum_stock || 0) && viewingProduct.low_stock_alert ? 'text-red-600' : 'text-green-600'}`}>
+                        {viewingProduct.is_tracked ? viewingProduct.stock_quantity : 'Untracked'} {viewingProduct.unit_value > 1 ? `${viewingProduct.unit_value} ${viewingProduct.unit}` : viewingProduct.unit}
+                      </span>
+                    </li>
+                    {viewingProduct.is_tracked && viewingProduct.low_stock_alert && (
+                      <li className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Minimum Stock</span>
+                        <span className="font-semibold text-gray-900">{viewingProduct.minimum_stock}</span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Pricing Details</h4>
+                  <ul className="space-y-3">
+                    {isRawMaterials && (
+                      <li className="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                        <span className="text-gray-500">Cost Price</span>
+                        <span className="font-semibold text-gray-900">৳ {viewingProduct.cost || 0}</span>
+                      </li>
+                    )}
+                    {viewingProduct.use_for_processing && (
+                      <>
+                        <li className="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                          <span className="text-gray-500">Auto Process Price</span>
+                          <span className="font-semibold text-gray-900">৳ {viewingProduct.processing_price_auto}</span>
+                        </li>
+                        <li className="flex justify-between items-center text-sm border-b border-gray-200/60 pb-2">
+                          <span className="text-gray-500">Manual Process Price</span>
+                          <span className="font-semibold text-gray-900">৳ {viewingProduct.processing_price_manual}</span>
+                        </li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+              </div>
+
+              {viewingProduct.image_urls && viewingProduct.image_urls.length > 1 && (
+                <div className="mt-6 border-t border-gray-100 pt-5">
+                  <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Additional Images</h4>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {viewingProduct.image_urls.slice(1).map((url: string, idx: number) => (
+                      <img key={idx} src={url} alt={`Image ${idx + 2}`} className="w-20 h-20 rounded-lg object-cover border border-gray-200 flex-shrink-0 shadow-sm" />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-100 bg-white flex justify-end flex-shrink-0 rounded-b-2xl">
+              <button
+                onClick={() => setViewingProduct(null)}
+                className="px-6 py-2.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-lg shadow-sm hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
