@@ -1,0 +1,823 @@
+'use client';
+
+import { useState, useMemo } from 'react';
+import { api } from '@/lib/api';
+import { Plus, Trash2, Mail, FileText, Upload, User, Eye, Pencil, X, Search, Briefcase, Phone, DollarSign, DownloadCloud, Calendar, MessageSquare, MapPin, Hash, LayoutGrid, List, CheckCircle } from 'lucide-react';
+
+interface EmployeeTabProps {
+  employees: any[];
+  fetchEmployees: () => Promise<void>;
+  handleDelete: (table: string, id: string) => Promise<void>;
+}
+
+export default function EmployeeTab({ employees, fetchEmployees, handleDelete }: EmployeeTabProps) {
+  const [showForm, setShowForm] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profilePreview, setProfilePreview] = useState<string | null>(null);
+  
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
+  const [viewingEmployee, setViewingEmployee] = useState<any | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Phone Menu State for Card View
+  const [activePhoneMenu, setActivePhoneMenu] = useState<string | null>(null);
+
+  // Search and Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+
+  const [empData, setEmpData] = useState({
+    name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '',
+    id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [] as string[],
+    phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }],
+    daily_allowance: 0, monthly_allowance: 0,
+    is_authorizer: false
+  });
+
+  const parsePhones = (phoneVal: any) => {
+    if (Array.isArray(phoneVal)) return phoneVal;
+    if (typeof phoneVal === 'string' && phoneVal.startsWith('[')) {
+      try { return JSON.parse(phoneVal); } catch(e){}
+    }
+    if (phoneVal) {
+      return [{ number: phoneVal, is_whatsapp: false, is_imo: false, is_telegram: false }];
+    }
+    return [];
+  };
+
+  const [idPhotoFiles, setIdPhotoFiles] = useState<File[]>([]);
+  const [idPhotoPreviews, setIdPhotoPreviews] = useState<string[]>([]);
+
+  const uniqueRoles = useMemo(() => Array.from(new Set(employees.map(e => e.role).filter(Boolean))), [employees]);
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(emp => {
+      const phones = parsePhones(emp.phone);
+      const matchesPhone = phones.some((p: any) => p.number.includes(searchQuery));
+      const matchesSearch = emp.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            emp.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            matchesPhone;
+      const matchesRole = roleFilter ? emp.role === roleFilter : true;
+      return matchesSearch && matchesRole;
+    });
+  }, [employees, searchQuery, roleFilter]);
+
+  const uploadFile = async (file: File): Promise<string> => {
+    return api.uploadFile(file);
+  };
+
+  const handleIdImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      const totalImages = idPhotoFiles.length + filesArray.length;
+      
+      if (totalImages > 5) {
+        alert('You can only upload a maximum of 5 ID images.');
+        return;
+      }
+      
+      setIdPhotoFiles(prev => [...prev, ...filesArray]);
+      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      setIdPhotoPreviews(prev => [...prev, ...newPreviews]);
+    }
+  };
+
+  const removeIdImage = (index: number) => {
+    setIdPhotoFiles(prev => prev.filter((_, i) => i !== index));
+    setIdPhotoPreviews(prev => prev.filter((_, i) => i !== index));
+    if (empData.id_photo_urls[index]) {
+      setEmpData(prev => ({
+        ...prev,
+        id_photo_urls: prev.id_photo_urls.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  const uploadIdImages = async (): Promise<string[]> => {
+    const uploadedUrls: string[] = [...empData.id_photo_urls];
+    for (const file of idPhotoFiles) {
+      const url = await api.uploadFile(file);
+      uploadedUrls.push(url);
+    }
+    return uploadedUrls;
+  };
+
+  const handleEmpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      let profileImageUrl = empData.profile_image_url;
+      if (profileImageFile) profileImageUrl = await uploadFile(profileImageFile);
+      
+      const finalIdUrls = idPhotoFiles.length > 0 ? await uploadIdImages() : empData.id_photo_urls;
+
+      const payload = { 
+        ...empData, 
+        profile_image_url: profileImageUrl, 
+        id_photo_urls: finalIdUrls, 
+        phone: empData.phone_numbers, 
+        whatsapp: '' 
+      };
+      delete (payload as any).phone_numbers;
+
+      if (editingId) {
+        await api.updateEmployee(editingId, payload);
+      } else {
+        await api.createEmployee(payload);
+      }
+      resetEmpForm();
+      fetchEmployees();
+    } catch (error) {
+      console.error(error);
+      alert('Failed to save employee.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetEmpForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0, is_authorizer: false });
+    setProfilePreview(null);
+    setProfileImageFile(null);
+    setIdPhotoFiles([]);
+    setIdPhotoPreviews([]);
+  };
+
+  const handleEdit = (emp: any) => {
+    setEmpData({
+      name: emp.name,
+      role: emp.role,
+      salary: emp.salary,
+      phone: '',
+      whatsapp: '',
+      email: emp.email || '',
+      dob: emp.dob || '',
+      address: emp.address || '',
+      id_document_type: emp.id_document_type || 'NID',
+      id_document_number: emp.id_document_number || '',
+      profile_image_url: emp.profile_image_url || '',
+      id_photo_urls: emp.id_photo_urls || [],
+      phone_numbers: parsePhones(emp.phone),
+      daily_allowance: emp.daily_allowance || 0,
+      monthly_allowance: emp.monthly_allowance || 0,
+      is_authorizer: emp.is_authorizer || false
+    });
+    setProfilePreview(emp.profile_image_url || null);
+    setIdPhotoPreviews(emp.id_photo_urls || []);
+    setIdPhotoFiles([]);
+    setEditingId(emp.id);
+    setShowForm(true);
+  };
+
+  const inputClass = "w-full bg-[#1a2235] border border-[rgba(255,255,255,0.06)] rounded-lg p-2.5 text-sm text-[#e8eaf0] focus:border-[#c9a84c] focus:ring-1 focus:ring-[rgba(201,168,76,0.3)] outline-none transition-colors";
+  const labelClass = "block text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-2";
+
+  return (
+    <div className="space-y-6 max-w-[1400px] mx-auto">
+      {/* ── HEADER ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 bg-[#131929] p-6 rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-purple-400" />
+            <span className="text-xs font-bold tracking-[0.2em] text-[#8a95a8] uppercase">
+              Human Resources
+            </span>
+          </div>
+          <h1 className="flex items-center gap-3 text-2xl font-black text-white tracking-tight">
+            <User className="w-6 h-6 text-purple-400" /> Employee Directory
+          </h1>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-grow sm:min-w-[250px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+            <input 
+              type="text" 
+              placeholder="Search employees..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-[#1a2235] border border-[rgba(255,255,255,0.06)] rounded-lg text-sm text-[#e8eaf0] focus:outline-none focus:border-[#c9a84c] transition-colors shadow-sm"
+            />
+          </div>
+
+          <select 
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="px-4 py-2.5 bg-[#1a2235] border border-[rgba(255,255,255,0.06)] rounded-lg text-sm text-[#e8eaf0] focus:outline-none focus:border-[#c9a84c] transition-colors shadow-sm appearance-none"
+          >
+            <option value="">All Roles</option>
+            {uniqueRoles.map((role, idx) => (
+              <option key={idx} value={role}>{role}</option>
+            ))}
+          </select>
+
+          <div className="bg-[#1a2235] border border-[rgba(255,255,255,0.06)] rounded-lg p-1 flex items-center shadow-sm">
+            <button onClick={() => setViewMode('table')} className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-[#c9a84c] text-black' : 'text-[#8a95a8] hover:text-white'}`}>
+              <List className="w-4 h-4" />
+            </button>
+            <button onClick={() => setViewMode('card')} className={`p-2 rounded-md transition-colors ${viewMode === 'card' ? 'bg-[#c9a84c] text-black' : 'text-[#8a95a8] hover:text-white'}`}>
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+
+          <button onClick={() => { resetEmpForm(); setShowForm(true); }} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] text-sm font-extrabold shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition hover:opacity-90">
+            <Plus className="w-4 h-4" /> Add Employee
+          </button>
+        </div>
+      </div>
+
+      {/* ── EMPLOYEE FORM MODAL ── */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0f1a]/80 backdrop-blur-sm p-4 overflow-y-auto w-full animate-fade-in">
+          <div className="bg-[#131929] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-[rgba(201,168,76,0.2)] w-full max-w-4xl overflow-hidden flex flex-col my-auto max-h-[95vh]">
+            <div className="flex justify-between items-center p-6 border-b border-[rgba(255,255,255,0.04)] bg-[#1a2235] sticky top-0 z-10 w-full">
+              <div>
+                <h2 className="text-lg font-black text-[#c9a84c] uppercase tracking-widest">{editingId ? 'Edit Profile' : 'Register Employee'}</h2>
+                <p className="text-[11px] font-bold text-[#8a95a8] mt-1">{editingId ? 'Update employee details below.' : 'Fill out the details to add a new employee.'}</p>
+              </div>
+              <button type="button" onClick={resetEmpForm} className="text-[#8a95a8] hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.05)]"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="overflow-y-auto p-6 sm:p-8 w-full custom-scrollbar">
+              <form id="emp-form" onSubmit={handleEmpSubmit} className="flex flex-col gap-8 w-full">
+                <div className="flex flex-col md:flex-row gap-8 w-full">
+                  {/* Profile picture */}
+                  <div className="flex flex-col items-center justify-start w-full md:w-1/3 space-y-4">
+                    <div className="w-40 h-40 rounded-2xl bg-[#1a2235] flex items-center justify-center overflow-hidden border border-[rgba(255,255,255,0.05)] relative shadow-inner group">
+                      {profilePreview ? (
+                        <img src={profilePreview} alt="Preview" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      ) : (
+                        <div className="flex flex-col items-center text-[#4a5568]">
+                          <User className="w-12 h-12 mb-2 opacity-50" />
+                          <span className="text-[10px] uppercase font-bold tracking-widest">No Image</span>
+                        </div>
+                      )}
+                      <label className="absolute inset-0 bg-[#0b0f1a]/60 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[#c9a84c]">
+                        <Upload className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Upload</span>
+                        <input type="file" className="hidden" accept="image/*" onChange={e => {
+                          if (e.target.files?.[0]) { setProfileImageFile(e.target.files[0]); setProfilePreview(URL.createObjectURL(e.target.files[0])); }
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Details grid */}
+                  <div className="w-full md:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className={labelClass}>Full Name</label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input required type="text" placeholder="John Doe" value={empData.name} onChange={e => setEmpData({ ...empData, name: e.target.value })} className={`${inputClass} pl-10`} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Date of Birth</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input type="date" value={empData.dob} onChange={e => setEmpData({ ...empData, dob: e.target.value })} className={`${inputClass} pl-10 [color-scheme:dark]`} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Job Role</label>
+                      <div className="relative">
+                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <select required value={empData.role} onChange={e => setEmpData({ ...empData, role: e.target.value })} className={`${inputClass} pl-10 appearance-none`}>
+                          <option value="" disabled>Select Job Role</option>
+                          <option value="Manager">Manager</option>
+                          <option value="Admin">Admin</option>
+                          <option value="Sales Representative">Sales Representative</option>
+                          <option value="Accountant">Accountant</option>
+                          <option value="Operations">Operations</option>
+                          <option value="Delivery Personnel">Delivery Personnel</option>
+                          <option value="Factory Worker">Factory Worker</option>
+                          <option value="Processor">Processor</option>
+                          <option value="Support Staff">Support Staff</option>
+                          <option value="Driver">Driver</option>
+                          <option value="Labor">Labor</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Email Address</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input required type="email" placeholder="john@example.com" value={empData.email} onChange={e => setEmpData({ ...empData, email: e.target.value })} className={`${inputClass} pl-10`} />
+                      </div>
+                    </div>
+
+                    {/* Phones Form */}
+                    <div className="sm:col-span-2 bg-[#1a2235] p-5 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                       <div className="flex items-center justify-between mb-4">
+                         <label className="flex items-center gap-2 text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest">
+                           <Phone className="w-3 h-3 text-[#c9a84c]" /> Contact Numbers
+                         </label>
+                         <button type="button" onClick={() => setEmpData({...empData, phone_numbers: [...empData.phone_numbers, { number: '', is_whatsapp: false, is_imo: false, is_telegram: false }]})} className="text-[10px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] hover:bg-[rgba(201,168,76,0.2)] px-3 py-1.5 rounded uppercase tracking-wider transition-colors">
+                           + Add Phone
+                         </button>
+                       </div>
+                       
+                       <div className="space-y-3">
+                         {empData.phone_numbers.map((pn, idx) => (
+                           <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-[#131929] border border-[rgba(255,255,255,0.05)] p-3 rounded-lg">
+                             <input required type="text" value={pn.number} onChange={e => {
+                               const newPn = [...empData.phone_numbers];
+                               newPn[idx].number = e.target.value;
+                               setEmpData({...empData, phone_numbers: newPn});
+                             }} className="flex-1 w-full bg-transparent border-none text-sm text-white focus:ring-0 outline-none placeholder-[#4a5568]" placeholder="e.g. +8801..." />
+                             
+                             <div className="flex items-center gap-3 shrink-0 bg-[#1a2235] p-1.5 rounded-md border border-[rgba(255,255,255,0.05)]">
+                               <label className="flex items-center gap-1.5 cursor-pointer px-1.5 py-0.5 rounded transition hover:bg-[rgba(255,255,255,0.05)]">
+                                 <input type="checkbox" checked={pn.is_whatsapp} onChange={e => {
+                                   const newPn = [...empData.phone_numbers];
+                                   newPn[idx].is_whatsapp = e.target.checked;
+                                   setEmpData({...empData, phone_numbers: newPn});
+                                 }} className="w-3.5 h-3.5 accent-emerald-500 rounded bg-[#131929]" />
+                                 <span className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider">WA</span>
+                               </label>
+                               <label className="flex items-center gap-1.5 cursor-pointer px-1.5 py-0.5 rounded transition hover:bg-[rgba(255,255,255,0.05)]">
+                                 <input type="checkbox" checked={pn.is_imo} onChange={e => {
+                                   const newPn = [...empData.phone_numbers];
+                                   newPn[idx].is_imo = e.target.checked;
+                                   setEmpData({...empData, phone_numbers: newPn});
+                                 }} className="w-3.5 h-3.5 accent-indigo-500 rounded bg-[#131929]" />
+                                 <span className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider">imo</span>
+                               </label>
+                               <label className="flex items-center gap-1.5 cursor-pointer px-1.5 py-0.5 rounded transition hover:bg-[rgba(255,255,255,0.05)]">
+                                 <input type="checkbox" checked={pn.is_telegram} onChange={e => {
+                                   const newPn = [...empData.phone_numbers];
+                                   newPn[idx].is_telegram = e.target.checked;
+                                   setEmpData({...empData, phone_numbers: newPn});
+                                 }} className="w-3.5 h-3.5 accent-blue-500 rounded bg-[#131929]" />
+                                 <span className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider">TG</span>
+                               </label>
+                             </div>
+                             
+                             {empData.phone_numbers.length > 1 && (
+                               <button type="button" onClick={() => {
+                                 const newPn = empData.phone_numbers.filter((_, i) => i !== idx);
+                                 setEmpData({...empData, phone_numbers: newPn});
+                               }} className="text-[#4a5568] hover:text-red-500 p-2 shrink-0 bg-[#1a2235] border border-[rgba(255,255,255,0.05)] rounded-md transition-colors">
+                                 <X className="w-4 h-4" />
+                               </button>
+                             )}
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Base Salary (৳)</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input required type="number" placeholder="0.00" value={empData.salary} onChange={e => setEmpData({ ...empData, salary: Number(e.target.value) })} className={`${inputClass} pl-10`} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Daily Allowance (৳)</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input type="number" placeholder="0.00" value={empData.daily_allowance || ''} onChange={e => setEmpData({ ...empData, daily_allowance: Number(e.target.value) })} className={`${inputClass} pl-10 bg-[rgba(251,191,36,0.05)] border-[rgba(251,191,36,0.15)]`} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Monthly Allowance (৳)</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input type="number" placeholder="0.00" value={empData.monthly_allowance || ''} onChange={e => setEmpData({ ...empData, monthly_allowance: Number(e.target.value) })} className={`${inputClass} pl-10 bg-[rgba(52,211,153,0.05)] border-[rgba(52,211,153,0.15)]`} />
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Address</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 w-4 h-4 text-[#8a95a8]" />
+                        <textarea placeholder="Full Address" value={empData.address} onChange={e => setEmpData({ ...empData, address: e.target.value })} className={`${inputClass} pl-10 min-h-[80px]`} />
+                      </div>
+                    </div>
+                    
+                    <div className="sm:col-span-2 bg-[#1a2235] p-5 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={empData.is_authorizer} onChange={e => setEmpData({ ...empData, is_authorizer: e.target.checked })} className="w-5 h-5 accent-[#c9a84c] rounded bg-[#131929]" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-white">Assign as Authorizer</span>
+                          <span className="text-[11px] text-[#8a95a8] mt-0.5">Check this if the employee should appear in signature dropdowns.</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>ID Document Type</label>
+                      <div className="relative">
+                        <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <select value={empData.id_document_type} onChange={e => setEmpData({ ...empData, id_document_type: e.target.value })} className={`${inputClass} pl-10 appearance-none`}>
+                          <option value="NID">National ID (NID)</option>
+                          <option value="Driving License">Driving License</option>
+                          <option value="Passport">Passport</option>
+                          <option value="Birth Certificate">Birth Certificate</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>{empData.id_document_type} Number</label>
+                      <div className="relative">
+                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                        <input type="text" placeholder="Document Number" value={empData.id_document_number} onChange={e => setEmpData({ ...empData, id_document_number: e.target.value })} className={`${inputClass} pl-10`} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ID Images */}
+                <div className="bg-[#1a2235] p-6 rounded-xl border border-[rgba(255,255,255,0.04)] w-full">
+                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] tracking-widest mb-4 flex items-center gap-2">
+                    <FileText className="w-3 h-3" /> {empData.id_document_type} Document Photos (Max 5)
+                  </label>
+                  <div className="flex flex-wrap gap-4 items-start pb-2">
+                    {idPhotoPreviews.map((src, idx) => (
+                      <div key={idx} className="relative w-24 h-24 rounded-lg overflow-hidden border border-[rgba(255,255,255,0.1)] shadow-sm group bg-[#131929]">
+                        <img src={src} alt="preview" className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => removeIdImage(idx)} className="absolute top-1 right-1 bg-red-500/90 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {idPhotoPreviews.length < 5 && (
+                      <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-[rgba(255,255,255,0.1)] rounded-lg cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors text-[#8a95a8] hover:text-[#c9a84c]">
+                        <Upload className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] uppercase font-bold tracking-wider">Upload</span>
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleIdImageChange} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+            
+            <div className="flex gap-3 items-center justify-end p-6 border-t border-[rgba(255,255,255,0.04)] bg-[#1a2235] sticky bottom-0 z-10 w-full">
+              <button type="button" onClick={resetEmpForm} className="px-6 py-2.5 rounded-lg border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-white hover:bg-[rgba(255,255,255,0.05)] font-bold transition-colors text-sm">
+                Cancel
+              </button>
+              <button form="emp-form" type="submit" disabled={submitting} className="px-8 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] font-extrabold hover:opacity-90 transition-opacity shadow-[0_4px_16px_rgba(201,168,76,0.3)] text-sm disabled:opacity-50 flex items-center gap-2">
+                {submitting ? (
+                  <><div className="w-4 h-4 border-2 border-[#0a0900] border-t-transparent rounded-full animate-spin"></div> Saving...</>
+                ) : editingId ? (
+                  'Update Employee'
+                ) : (
+                  'Save Employee'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EMPLOYEE DATA DISPLAY ── */}
+      {viewMode === 'table' ? (
+      <div className="bg-[#131929] rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[rgba(201,168,76,0.05)] border-b border-[rgba(201,168,76,0.15)]">
+              <tr>
+                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Employee</th>
+                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Role</th>
+                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Contact</th>
+                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Salary</th>
+                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
+              {filteredEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-16 text-center">
+                    <div className="flex flex-col items-center justify-center text-[#4a5568]">
+                      <User className="w-10 h-10 mb-3 opacity-50" />
+                      <p className="text-sm font-bold text-[#8a95a8]">No employees found</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredEmployees.map(e => (
+                  <tr key={e.id} className="hover:bg-[rgba(201,168,76,0.03)] transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-[#1a2235] border border-[rgba(255,255,255,0.05)] overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          {e.profile_image_url ? (
+                            <img src={e.profile_image_url} alt={e.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-5 h-5 text-[#4a5568]" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-bold text-[#e8eaf0] text-sm group-hover:text-[#c9a84c] transition-colors">{e.name}</p>
+                          <p className="text-[11px] text-[#8a95a8] flex items-center gap-1 mt-0.5"><Mail className="w-3 h-3" /> {e.email || 'No email'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.2)]">
+                        {e.role || 'Unassigned'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1 text-sm font-medium text-[#e8eaf0]">
+                        {(() => {
+                           const phones = parsePhones(e.phone);
+                           if (phones.length === 0) return <span className="text-[#4a5568] text-[11px] font-bold uppercase tracking-widest italic">Not provided</span>;
+                           return phones.map((pn: any, i: number) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <Phone className="w-3 h-3 text-[#4a5568] shrink-0" />
+                                <span>{pn.number}</span>
+                                <div className="flex gap-1">
+                                  {pn.is_whatsapp && <a href={`https://wa.me/${pn.number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] text-emerald-400 font-bold bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-colors">WA</a>}
+                                  {pn.is_imo && <a href={`tel:${pn.number}`} className="text-[9px] text-indigo-400 font-bold bg-[rgba(129,140,248,0.1)] border border-[rgba(129,140,248,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-colors">imo</a>}
+                                  {pn.is_telegram && <a href={`https://t.me/${pn.number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] text-blue-400 font-bold bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-colors">TG</a>}
+                                </div>
+                              </div>
+                           ));
+                        })()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-black text-white">
+                        <span className="text-[#8a95a8] font-bold mr-0.5">৳</span>{Number(e.salary || 0).toLocaleString()} <span className="text-[10px] uppercase font-bold text-[#4a5568] tracking-widest">/mo</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-1 items-center justify-end">
+                        <button onClick={() => setViewingEmployee(e)} className="p-2 text-[#8a95a8] hover:text-white hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors" title="View Details">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleEdit(e)} className="p-2 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors" title="Edit">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => { if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-2 text-[#8a95a8] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+         {filteredEmployees.map(e => (
+            <div key={e.id} className="bg-[#131929] border border-[rgba(255,255,255,0.04)] hover:border-[rgba(201,168,76,0.3)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] rounded-2xl p-6 flex flex-col group transition-all duration-300 relative overflow-visible">
+               <div className="flex justify-between items-start mb-4 relative z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-[#1a2235] border border-[rgba(255,255,255,0.05)] flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                     {e.profile_image_url ? (
+                        <img src={e.profile_image_url} alt={e.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                     ) : (
+                        <User className="w-8 h-8 text-[#4a5568]" />
+                     )}
+                  </div>
+                  
+                  {/* Card Actions */}
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-[-10px] group-hover:translate-y-0">
+                     <button onClick={() => setViewingEmployee(e)} className="p-1.5 text-[#8a95a8] hover:text-white bg-[#1a2235] rounded-md transition-colors border border-[rgba(255,255,255,0.05)]" title="View Profile">
+                       <Eye className="w-4 h-4" />
+                     </button>
+                     <button onClick={() => handleEdit(e)} className="p-1.5 text-[#8a95a8] hover:text-[#c9a84c] bg-[#1a2235] rounded-md transition-colors border border-[rgba(255,255,255,0.05)]" title="Edit">
+                       <Pencil className="w-4 h-4" />
+                     </button>
+                     <button onClick={() => { if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-1.5 text-[#8a95a8] hover:text-red-400 bg-[#1a2235] rounded-md transition-colors border border-[rgba(255,255,255,0.05)]" title="Delete">
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                  </div>
+               </div>
+               
+               <div className="mb-4 relative z-10">
+                  <h3 className="font-black text-white text-lg leading-tight line-clamp-1 group-hover:text-[#c9a84c] transition-colors">{e.name}</h3>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="inline-flex items-center text-[10px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded uppercase tracking-widest">
+                       {e.role || 'Unassigned'}
+                    </span>
+                    {e.is_authorizer && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-2 py-0.5 rounded uppercase tracking-widest" title="Authorized Signatory">
+                        <CheckCircle className="w-3 h-3" /> Auth
+                      </span>
+                    )}
+                  </div>
+               </div>
+               
+               <div className="flex-1 space-y-3 mb-5 border-t border-[rgba(255,255,255,0.04)] pt-4 relative z-10">
+                  {/* UPDATED CARD PHONE SECTION WITH INTERACTIVE MENU */}
+                  {(() => {
+                     const phones = parsePhones(e.phone);
+                     if (phones.length > 0) {
+                        return (
+                           <div className="flex items-center justify-between bg-[#1a2235] rounded-lg p-2 border border-[rgba(255,255,255,0.02)] relative overflow-visible">
+                             <span className="text-[#e8eaf0] font-bold text-sm tracking-wide break-all mr-2">{phones[0].number}</span>
+                             
+                             <div className="relative">
+                               <button 
+                                 onClick={() => setActivePhoneMenu(activePhoneMenu === e.id ? null : e.id)}
+                                 className={`flex items-center justify-center w-8 h-8 rounded shrink-0 transition-colors ${activePhoneMenu === e.id ? 'bg-blue-500 text-white' : 'bg-[rgba(96,165,250,0.1)] text-blue-400 hover:bg-blue-500 hover:text-white'}`}
+                               >
+                                 <Phone className="w-4 h-4" />
+                               </button>
+
+                               {/* Interactive Phone Dropdown */}
+                               {activePhoneMenu === e.id && (
+                                 <>
+                                   <div className="fixed inset-0 z-10" onClick={() => setActivePhoneMenu(null)}></div>
+                                   <div className="absolute right-0 bottom-full mb-2 w-max bg-[#131929] border border-[rgba(255,255,255,0.05)] rounded-lg shadow-[0_4px_24px_rgba(0,0,0,0.6)] z-20 flex flex-col p-1.5 animate-slide-up">
+                                     <a href={`tel:${phones[0].number}`} className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[#e8eaf0] hover:bg-[rgba(255,255,255,0.05)] rounded transition-colors">
+                                        <Phone className="w-3.5 h-3.5 text-[#8a95a8]" /> Direct Call
+                                     </a>
+                                     {phones[0].is_whatsapp && (
+                                        <a href={`https://wa.me/${phones[0].number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-[rgba(52,211,153,0.1)] rounded transition-colors">
+                                           <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                                        </a>
+                                     )}
+                                     {phones[0].is_telegram && (
+                                        <a href={`https://t.me/${phones[0].number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-blue-400 hover:bg-[rgba(96,165,250,0.1)] rounded transition-colors">
+                                           <MessageSquare className="w-3.5 h-3.5" /> Telegram
+                                        </a>
+                                     )}
+                                     {phones[0].is_imo && (
+                                        <a href={`tel:${phones[0].number}`} className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-indigo-400 hover:bg-[rgba(129,140,248,0.1)] rounded transition-colors">
+                                           <Phone className="w-3.5 h-3.5" /> imo (Dial)
+                                        </a>
+                                     )}
+                                   </div>
+                                 </>
+                               )}
+                             </div>
+                           </div>
+                        )
+                     }
+                     return <div className="text-[#4a5568] text-[10px] uppercase font-bold tracking-widest p-2">No phone number</div>
+                  })()}
+                  
+                  <span className="flex items-center gap-2.5 text-xs text-[#8a95a8] font-bold px-1 truncate"><Mail className="w-3.5 h-3.5 text-[#4a5568] shrink-0" /> {e.email || 'No email'}</span>
+               </div>
+
+               <div className="pt-4 border-t border-[rgba(255,255,255,0.04)] flex items-center justify-between relative z-10">
+                  <div>
+                     <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest mb-0.5">Base Salary</p>
+                     <p className="font-black text-white text-lg"><span className="mr-0.5 text-sm text-[#8a95a8]">৳</span>{Number(e.salary || 0).toLocaleString()} <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a5568]">/mo</span></p>
+                  </div>
+               </div>
+            </div>
+         ))}
+         
+         {filteredEmployees.length === 0 && (
+            <div className="col-span-full py-20 text-center bg-[#131929] rounded-2xl border border-[rgba(255,255,255,0.02)] border-dashed">
+               <User className="w-10 h-10 text-[#1a2235] mx-auto mb-4" />
+               <h3 className="text-sm font-bold text-[#8a95a8]">No Employees Found</h3>
+            </div>
+         )}
+      </div>
+      )}
+
+      {/* ── VIEW PROFILE MODAL ── */}
+      {viewingEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0f1a]/80 backdrop-blur-sm p-4 w-full animate-fade-in">
+          <div className="bg-[#131929] border border-[rgba(201,168,76,0.2)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header Background */}
+            <div className="h-24 bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] relative shrink-0">
+               <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at center, #c9a84c 0%, transparent 70%)' }}></div>
+              <button onClick={() => setViewingEmployee(null)} className="absolute top-4 right-4 text-[#8a95a8] hover:text-white bg-[#131929]/50 hover:bg-[#131929] p-1.5 rounded-lg transition-colors border border-[rgba(255,255,255,0.05)] z-10"><X className="w-5 h-5" /></button>
+            </div>
+            
+            {/* Fixed Profile Image & Name */}
+            <div className="flex flex-col items-center -mt-12 mb-4 relative z-10 shrink-0">
+              <div className="w-24 h-24 rounded-2xl bg-[#0b0f1a] flex items-center justify-center overflow-hidden border-4 border-[#131929] shadow-lg">
+                {viewingEmployee.profile_image_url ? (
+                  <img src={viewingEmployee.profile_image_url} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-10 h-10 text-[#4a5568]" />
+                )}
+              </div>
+              <h3 className="text-2xl font-black text-white mt-3 text-center">{viewingEmployee.name}</h3>
+              <div className="flex gap-2 mt-2">
+                <span className="text-[10px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-3 py-1 rounded uppercase tracking-widest">{viewingEmployee.role || 'Unassigned'}</span>
+                {viewingEmployee.is_authorizer && (
+                   <span className="text-[10px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-3 py-1 rounded uppercase tracking-widest flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Authorizer
+                   </span>
+                )}
+              </div>
+            </div>
+            
+            {/* Scrollable Details Section */}
+            <div className="px-6 pb-6 relative overflow-y-auto custom-scrollbar flex-1">
+              <div className="space-y-4 bg-[#1a2235] p-5 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                    <Calendar className="w-4 h-4 text-[#c9a84c]" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Date of Birth</p>
+                    <p className="font-bold text-[#e8eaf0] truncate">{viewingEmployee.dob || 'Not provided'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Email Address</p>
+                    <p className="font-bold text-[#e8eaf0] truncate">{viewingEmployee.email || 'N/A'}</p>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                   <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest pl-1 mb-1 border-b border-[rgba(255,255,255,0.02)] pb-2">Contact Numbers</p>
+                   {parsePhones(viewingEmployee.phone).length > 0 ? (
+                     <div className="grid grid-cols-1 gap-2">
+                       {parsePhones(viewingEmployee.phone).map((pn: any, i: number) => (
+                         <div key={i} className="flex items-center justify-between gap-3 bg-[#131929] p-2.5 rounded-lg border border-[rgba(255,255,255,0.02)]">
+                           <div className="flex items-center gap-2">
+                             <Phone className="w-3.5 h-3.5 text-[#4a5568]" />
+                             <span className="font-bold text-sm text-[#e8eaf0]">{pn.number}</span>
+                           </div>
+                           <div className="flex gap-1.5">
+                             {pn.is_whatsapp && <a href={`https://wa.me/${pn.number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-1.5 py-0.5 rounded uppercase hover:bg-emerald-500 hover:text-white transition-colors">WA</a>}
+                             {pn.is_imo && <a href={`tel:${pn.number}`} className="text-[9px] font-black text-indigo-400 bg-[rgba(129,140,248,0.1)] border border-[rgba(129,140,248,0.2)] px-1.5 py-0.5 rounded uppercase hover:bg-indigo-500 hover:text-white transition-colors">imo</a>}
+                             {pn.is_telegram && <a href={`https://t.me/${pn.number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] font-black text-blue-400 bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] px-1.5 py-0.5 rounded uppercase hover:bg-blue-500 hover:text-white transition-colors">TG</a>}
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   ) : (
+                     <span className="text-[#4a5568] text-[10px] uppercase font-bold tracking-widest italic pl-1">No contact number provided</span>
+                   )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Address</p>
+                    <p className="font-bold text-[#e8eaf0] truncate" title={viewingEmployee.address}>{viewingEmployee.address || 'N/A'}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Base Salary</p>
+                    <p className="font-black text-white"><span className="text-lg font-bold mr-0.5 text-[#8a95a8]">৳</span>{Number(viewingEmployee.salary || 0).toLocaleString()} <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a5568]">/ month</span></p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                   {viewingEmployee.daily_allowance > 0 && (
+                      <div className="bg-[#131929] p-3 rounded-lg border border-[rgba(255,255,255,0.02)]">
+                         <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1">Daily Allowance</p>
+                         <p className="font-bold text-white text-sm">৳ {viewingEmployee.daily_allowance}</p>
+                      </div>
+                   )}
+                   {viewingEmployee.monthly_allowance > 0 && (
+                      <div className="bg-[#131929] p-3 rounded-lg border border-[rgba(255,255,255,0.02)]">
+                         <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1">Monthly Allowance</p>
+                         <p className="font-bold text-white text-sm">৳ {viewingEmployee.monthly_allowance}</p>
+                      </div>
+                   )}
+                </div>
+                
+                <div className="flex flex-col gap-2 pt-4 border-t border-[rgba(255,255,255,0.04)]">
+                  <p className="text-[10px] font-black text-[#c9a84c] uppercase tracking-widest">
+                    ID Document ({viewingEmployee.id_document_type || 'NID'} {viewingEmployee.id_document_number ? `- ${viewingEmployee.id_document_number}` : ''})
+                  </p>
+                  {viewingEmployee.id_photo_urls && viewingEmployee.id_photo_urls.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 custom-scrollbar overflow-x-auto pb-1">
+                       {viewingEmployee.id_photo_urls.map((url: string, i: number) => (
+                         <a key={i} href={url} target="_blank" rel="noreferrer" className="w-14 h-14 rounded-lg overflow-hidden border border-[rgba(255,255,255,0.1)] hover:border-[#c9a84c] transition-colors shadow-sm block shrink-0">
+                           <img src={url} alt={`ID ${i+1}`} className="w-full h-full object-cover" />
+                         </a>
+                       ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] uppercase font-bold text-[#4a5568] tracking-widest italic">No documents uploaded</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-[rgba(255,255,255,0.04)] bg-[#1a2235] flex justify-end shrink-0">
+              <button onClick={() => setViewingEmployee(null)} className="px-6 py-2.5 bg-[#131929] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] font-bold rounded-lg shadow-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors text-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

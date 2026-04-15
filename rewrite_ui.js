@@ -1,0 +1,637 @@
+const fs = require('fs');
+const path = 'app/invoices/page.tsx';
+const content = fs.readFileSync(path, 'utf8');
+const lines = content.split('\n');
+
+const topParts = lines.slice(0, 316);
+
+const newContent = `
+   const N = {
+      bg: '#0b0f1a', card: '#131929', card2: '#1a2235',
+      gold: '#c9a84c', goldBr: '#f0c040', goldFt: 'rgba(201,168,76,.10)',
+      border: 'rgba(201,168,76,.18)', borderSub: 'rgba(255,255,255,.06)',
+      text: '#e8eaf0', textSub: 'rgba(255,255,255,.45)', textMut: 'rgba(255,255,255,.28)',
+      green: '#34d399', red: '#f87171', blue: '#60a5fa', orange: '#fb923c'
+   };
+
+   const inp: React.CSSProperties = {
+      width:'100%', padding:'9px 12px',
+      background:'rgba(255,255,255,.06)', border:'1px solid ' + N.border,
+      borderRadius:9, color:N.text, fontSize:13, outline:'none',
+   };
+   const lbl: React.CSSProperties = {
+      display:'block', fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:'.05em',
+      color:'rgba(201,168,76,.65)', marginBottom:6,
+   };
+
+   const renderPaymentDetails = () => {
+      if (['bikash', 'nagad', 'rocket', 'upay'].includes(form.payment_method)) {
+         return (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+               <div style={{ gridColumn:'1/-1' }}>
+                  <label style={lbl}>{activeTab === 'sell' ? 'Receiving To (Your Account)' : 'Paying From (Your Account)'}</label>
+                  <select required value={form.payment_details.internal_account_id || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value } })} style={{ ...inp, background:N.card2 }}>
+                     <option value="" disabled>Select your {form.payment_method} account</option>
+                     {internalAccounts.filter(acc => acc.account_type === 'wallet' && acc.provider_name.toLowerCase() === form.payment_method.toLowerCase()).map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number} {acc.account_name ? '(' + acc.account_name + ')' : ''}</option>
+                     ))}
+                  </select>
+               </div>
+               <div>
+                  <label style={lbl}>{activeTab === 'sell' ? "Send Number (Customer's)" : "Received Number (Supplier/Processor's)"}</label>
+                  <input required placeholder="+8801..." type="text" value={form.payment_details.number || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, number: e.target.value } })} style={inp} />
+               </div>
+               <div>
+                  <label style={lbl}>Transaction ID</label>
+                  <input required placeholder="TRX..." type="text" value={form.payment_details.transaction_id || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, transaction_id: e.target.value } })} style={{ ...inp, fontFamily:'monospace', textTransform:'uppercase' }} />
+               </div>
+            </div>
+         );
+      }
+
+      if (form.payment_method === 'bank_to_bank_transfer') {
+         const selectedContact = contacts.find(c => c.id === form.contact_id);
+         const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
+
+         return (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+               <div>
+                  <label style={lbl}>Your Bank Account</label>
+                  <select required value={form.payment_details.internal_account_id || ''} onChange={e => {
+                     setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value } });
+                  }} style={{ ...inp, background:N.card2 }}>
+                     <option value="" disabled>Select your Bank Account</option>
+                     {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                     ))}
+                  </select>
+               </div>
+               <div>
+                  <label style={lbl}>{activeTab === 'sell' ? "Customer's Bank Account" : "Supplier's Bank Account"}</label>
+                  <select required value={form.payment_details.bank_name + '|' + form.payment_details.account_number} onChange={e => {
+                     const val = e.target.value;
+                     const selectedBank = contactBanks.find((b: any) => b.bank_name + '|' + b.account_number === val);
+                     if (selectedBank) {
+                        setForm({ ...form, payment_details: { ...form.payment_details, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch } });
+                     }
+                  }} style={{ ...inp, background:N.card2 }}>
+                     <option value="|" disabled>Select Partner Bank Account</option>
+                     {contactBanks.map((b: any, idx: number) => {
+                        if (!b.bank_name) return null;
+                        return <option key={idx} value={b.bank_name + '|' + b.account_number}>{b.bank_name} - {b.account_number}</option>
+                     })}
+                  </select>
+                  {contactBanks.length === 0 && <span style={{ fontSize:10, color:N.red, fontWeight:800, marginTop:4, display:'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
+               </div>
+
+               <div style={{ gridColumn:'1/-1' }}>
+                  <label style={lbl}>Transfer Date and Time</label>
+                  <input required type="datetime-local" value={form.payment_details.datetime || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, datetime: e.target.value } })} style={inp} />
+               </div>
+            </div>
+         );
+      }
+
+      if (form.payment_method === 'bank_transfer') {
+         if (activeTab === 'sell') {
+            return (
+               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+                  <div style={{ gridColumn:'1/-1' }}>
+                     <label style={lbl}>Receiving Bank Account (Your Account)</label>
+                     <select required value={form.payment_details.internal_account_id || ''} onChange={e => {
+                        const selected = internalAccounts.find(a => a.id === e.target.value);
+                        setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value, bank_name: selected?.provider_name || '', account_number: selected?.account_number || '', account_name: selected?.account_name || '', branch: selected?.branch || '' } });
+                     }} style={{ ...inp, background:N.card2 }}>
+                        <option value="" disabled>Select your Bank Account</option>
+                        {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                           <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                        ))}
+                     </select>
+                  </div>
+                  <div>
+                     <label style={lbl}>Receive Date and Time</label>
+                     <input required type="datetime-local" value={form.payment_details.datetime || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, datetime: e.target.value } })} style={inp} />
+                  </div>
+               </div>
+            );
+         } else {
+            return (
+               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+                  <div style={{ gridColumn:'1/-1' }}>
+                     <label style={lbl}>Paying Bank Account (Your Account)</label>
+                     <select required value={form.payment_details.internal_account_id || ''} onChange={e => {
+                        const selected = internalAccounts.find(a => a.id === e.target.value);
+                        setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value, bank_name: selected?.provider_name || '', account_number: selected?.account_number || '', account_name: selected?.account_name || '', branch: selected?.branch || '' } });
+                     }} style={{ ...inp, background:N.card2 }}>
+                        <option value="" disabled>Select your Bank Account</option>
+                        {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                           <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                        ))}
+                     </select>
+                  </div>
+                  <div style={{ gridColumn:'1/-1' }}>
+                     <label style={lbl}>Send Date and Time</label>
+                     <input required type="datetime-local" value={form.payment_details.datetime || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, datetime: e.target.value } })} style={inp} />
+                  </div>
+               </div>
+            );
+         }
+      }
+
+      if (form.payment_method === 'cheque') {
+         if (activeTab === 'sell') {
+            return (
+               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+                  <div>
+                     <label style={lbl}>Bank Account Name</label>
+                     <input required type="text" value={form.payment_details.account_name || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, account_name: e.target.value } })} style={inp} />
+                  </div>
+                  <div>
+                     <label style={lbl}>Bank Account Number</label>
+                     <input required type="text" value={form.payment_details.account_number || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, account_number: e.target.value } })} style={{ ...inp, fontFamily:'monospace' }} />
+                  </div>
+                  <div>
+                     <label style={lbl}>Cheque Number</label>
+                     <input required type="text" value={form.payment_details.cheque_number || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, cheque_number: e.target.value } })} style={{ ...inp, fontFamily:'monospace' }} />
+                  </div>
+                  <div>
+                     <label style={lbl}>Cheque Date</label>
+                     <input required type="date" value={form.payment_details.cheque_date || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, cheque_date: e.target.value } })} style={inp} />
+                  </div>
+               </div>
+            );
+         } else {
+            return (
+               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+                  <div style={{ gridColumn:'1/-1' }}>
+                     <label style={lbl}>Bank Name</label>
+                     <input required type="text" value={form.payment_details.bank_name || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, bank_name: e.target.value } })} style={inp} />
+                  </div>
+                  <div>
+                     <label style={lbl}>Cheque Number</label>
+                     <input required type="text" value={form.payment_details.cheque_number || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, cheque_number: e.target.value } })} style={{ ...inp, fontFamily:'monospace' }} />
+                  </div>
+                  <div>
+                     <label style={lbl}>Cheque Date</label>
+                     <input required type="date" value={form.payment_details.cheque_date || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, cheque_date: e.target.value } })} style={inp} />
+                  </div>
+               </div>
+            );
+         }
+      }
+
+      return null;
+   };
+
+   return (
+      <div className="pb-12 dropdown-container" style={{ fontFamily: "'Inter', sans-serif" }}>
+         <div style={{
+             background: 'linear-gradient(135deg, #0e1628, #131929)',
+             border: '1px solid ' + N.border,
+             borderRadius: 16,
+             padding: '24px 30px',
+             marginBottom: 20,
+             display: 'flex',
+             justifyContent: 'space-between',
+             alignItems: 'flex-end',
+             flexWrap: 'wrap',
+             gap: 16
+         }}>
+            <div>
+               <p style={{ color: N.gold, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FileText style={{ width: 14, height: 14 }} /> Comprehensive Invoicing Engine
+               </p>
+               <h1 style={{ fontSize: 24, fontWeight: 900, color: N.goldBr, margin: '0 0 6px' }}>
+                  {activeTab === 'buy' ? 'Purchases (Buy)' : activeTab === 'sell' ? 'Sales (Sell)' : 'Sales Returns'}
+               </h1>
+               <p style={{ color: N.textSub, fontSize: 13, margin: 0 }}>
+                  {activeTab === 'buy' ? 'Record vendor purchases, process upfront payments.' :
+                   activeTab === 'sell' ? 'Generate customer invoices and track revenue.' :
+                   'Process returns and log refunds.'}
+               </p>
+            </div>
+
+            {!showBuilder && (
+               <button onClick={() => { resetForm(); setShowBuilder(true); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10,
+                     border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')',
+                     color: '#0a0900', fontWeight: 800, fontSize: 13, boxShadow: '0 4px 14px rgba(201,168,76,.35)' }}>
+                  <Plus style={{ width: 16, height: 16 }} />
+                  Create {activeTab === 'buy' ? 'Purchase' : activeTab === 'sell' ? 'Sale' : 'Return'}
+               </button>
+            )}
+         </div>
+
+         {!showBuilder ? (
+            <div style={{ background: N.card, border: '1px solid ' + N.borderSub, borderRadius: 14, overflow: 'hidden' }}>
+               <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                     <thead>
+                        <tr style={{ background: 'rgba(201,168,76,.06)' }}>
+                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Invoice ID / Date</th>
+                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>{activeTab === 'buy' ? 'Supplier' : 'Customer'}</th>
+                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Total Value</th>
+                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Payment Status</th>
+                           <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Actions</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        {invoices.length === 0 && (
+                           <tr>
+                              <td colSpan={5} style={{ padding: '56px 20px', textAlign: 'center' }}>
+                                 <FileText style={{ width: 34, height: 34, color: 'rgba(201,168,76,.18)', margin: '0 auto 10px' }} />
+                                 <p style={{ fontSize: 14, color: N.textMut, fontWeight: 600, margin: 0 }}>No records found for {activeTab}</p>
+                              </td>
+                           </tr>
+                        )}
+                        {invoices.map((inv, i) => (
+                           <tr key={inv.id} style={{ borderBottom: i < invoices.length - 1 ? '1px solid ' + N.borderSub : 'none', transition: 'background .12s' }}
+                               onMouseEnter={e => e.currentTarget.style.background = 'rgba(201,168,76,.04)'}
+                               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <td style={{ padding: '13px 20px' }}>
+                                 <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: N.text }}>#{inv.id.substring(0, 8).toUpperCase()}</span>
+                                 <div style={{ fontSize: 11, color: N.textSub, marginTop: 2 }}>{new Date(inv.date).toLocaleDateString()}</div>
+                              </td>
+                              <td style={{ padding: '13px 20px' }}>
+                                 <span style={{ fontWeight: 800, color: N.goldBr, fontSize: 13 }}>{inv.contacts?.name || 'Unknown'}</span>
+                                 {inv.contacts?.shop_name && <span style={{ display: 'block', fontSize: 11, color: 'rgba(201,168,76,.6)' }}>{inv.contacts.shop_name}</span>}
+                              </td>
+                              <td style={{ padding: '13px 20px', fontWeight: 900, color: N.text, fontSize: 14 }}>
+                                 ৳ {Number(inv.total).toLocaleString()}
+                              </td>
+                              <td style={{ padding: '13px 20px' }}>
+                                 <span style={{
+                                    display: 'inline-flex', padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em',
+                                    background: inv.payment_status === 'paid' ? 'rgba(52,211,153,.1)' : inv.payment_status === 'partial' ? 'rgba(201,168,76,.1)' : 'rgba(248,113,113,.1)',
+                                    color: inv.payment_status === 'paid' ? N.green : inv.payment_status === 'partial' ? N.gold : N.red,
+                                    border: '1px solid ' + (inv.payment_status === 'paid' ? 'rgba(52,211,153,.2)' : inv.payment_status === 'partial' ? 'rgba(201,168,76,.2)' : 'rgba(248,113,113,.2)')
+                                 }}>
+                                    {inv.payment_status}
+                                 </span>
+                                 {Number(inv.due_amount) > 0 && <div style={{ fontSize: 10, color: N.red, fontWeight: 800, marginTop: 4 }}>Due: ৳ {inv.due_amount}</div>}
+                              </td>
+                              <td style={{ padding: '13px 20px', textAlign: 'right' }}>
+                                 <div style={{ display: 'inline-flex', gap: 4 }}>
+                                    <button onClick={() => setViewingInvoice(inv)} title="View Details"
+                                       style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,.3)', transition: 'all .12s' }}
+                                       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(96,165,250,.1)'; e.currentTarget.style.color = N.blue; }}
+                                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,.3)'; }}>
+                                       <Eye style={{ width: 15, height: 15 }} />
+                                    </button>
+                                    <button onClick={() => handleDelete(inv.id)} title="Delete"
+                                       style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,.3)', transition: 'all .12s' }}
+                                       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,.1)'; e.currentTarget.style.color = N.red; }}
+                                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,.3)'; }}>
+                                       <Trash2 style={{ width: 15, height: 15 }} />
+                                    </button>
+                                 </div>
+                              </td>
+                           </tr>
+                        ))}
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+         ) : (
+            <div style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 16, overflow: 'hidden', padding: 24 }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, color: N.goldBr, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                     <Calculator style={{ width: 18, height: 18 }} />
+                     New {activeTab === 'buy' ? 'Purchase Invoice' : activeTab === 'sell' ? 'Sales Invoice' : 'Return Invoice'}
+                  </h2>
+                  <button onClick={() => setShowBuilder(false)}
+                     style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.05)', color: 'rgba(255,255,255,.6)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                     Cancel
+                  </button>
+               </div>
+
+               <form onSubmit={handleSubmit}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24, padding: 16, background: 'rgba(255,255,255,.02)', borderRadius: 12, border: '1px solid ' + N.borderSub }}>
+                     <div style={{ gridColumn: '1 / -1' }}>
+                        <label style={lbl}><FileText style={{ width:12, height:12, display:'inline-block', marginRight:4 }} /> Memo no</label>
+                        <input type="text" disabled value="[ Auto-generated upon save ]" style={{ ...inp, color: N.textMut, background: 'transparent', border: '1px dashed ' + N.borderSub, cursor: 'not-allowed' }} />
+                     </div>
+                     <div>
+                        <label style={lbl}>{activeTab === 'buy' ? 'Supplier *' : 'Customer *'}</label>
+                        <select required value={form.contact_id} onChange={e => setForm({ ...form, contact_id: e.target.value })} style={{ ...inp, background: N.card2 }}>
+                           <option value="" disabled>-- Select {activeTab === 'buy' ? 'Supplier' : 'Customer'} --</option>
+                           {contacts.map(c => <option key={c.id} value={c.id}>{c.name} {c.shop_name ? '(' + c.shop_name + ')' : ''}</option>)}
+                        </select>
+                     </div>
+                     <div>
+                        <label style={lbl}>Date *</label>
+                        <input required type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inp} />
+                     </div>
+                  </div>
+
+                  <div style={{ marginBottom: 24 }}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: 14, fontWeight: 800, color: N.gold, margin: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>Items</h3>
+                     </div>
+
+                     <div style={{ background: N.card2, border: '1px solid ' + N.borderSub, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                        <div style={{ overflowX: 'auto' }}>
+                           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+                              <thead>
+                                 <tr style={{ background: 'rgba(201,168,76,.08)' }}>
+                                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Product</th>
+                                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Variant/Head</th>
+                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 100, borderBottom: '1px solid ' + N.borderSub }}>Quantity</th>
+                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Unit Price (৳)</th>
+                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 120, borderBottom: '1px solid ' + N.borderSub }}>Subtotal (৳)</th>
+                                    <th style={{ padding: '10px 14px', width: 50, borderBottom: '1px solid ' + N.borderSub }}></th>
+                                 </tr>
+                              </thead>
+                              <tbody>
+                                 {form.items.map((item, index) => {
+                                    const selProd = products.find(p => p.id === item.product_id);
+                                    return (
+                                       <tr key={index} style={{ borderBottom: index < form.items.length - 1 ? '1px solid ' + N.borderSub : 'none' }}>
+                                          <td style={{ padding: '10px 14px' }}>
+                                             <select required value={item.product_id} onChange={e => handleItemChange(index, 'product_id', e.target.value)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
+                                                <option value="" disabled>Select Product</option>
+                                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                             </select>
+                                          </td>
+                                          <td style={{ padding: '10px 14px' }}>
+                                             {(selProd?.product_heads && Array.isArray(selProd.product_heads) && selProd.product_heads.length > 0) ? (
+                                                <select value={item.selected_head || ''} onChange={e => handleItemChange(index, 'selected_head', e.target.value)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
+                                                   <option value="">No Variant</option>
+                                                   {selProd.product_heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
+                                                </select>
+                                             ) : (
+                                                <span style={{ fontSize: 11, color: N.textMut, paddingLeft: 8 }}>N/A</span>
+                                             )}
+                                          </td>
+                                          <td style={{ padding: '10px 14px' }}>
+                                             <input required type="number" min="1" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
+                                          </td>
+                                          <td style={{ padding: '10px 14px' }}>
+                                             <input required type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
+                                          </td>
+                                          <td style={{ padding: '10px 14px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: N.text }}>
+                                             {(Number(item.quantity) * Number(item.price)).toFixed(2)}
+                                          </td>
+                                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                                             <button type="button" onClick={() => handleRemoveItem(index)} disabled={form.items.length === 1}
+                                                style={{ padding: '6px', borderRadius: 6, border: 'none', background: form.items.length === 1 ? 'transparent' : 'rgba(248,113,113,.1)', color: form.items.length === 1 ? N.textMut : N.red, cursor: form.items.length === 1 ? 'not-allowed' : 'pointer' }}>
+                                                <Trash2 style={{ width: 14, height: 14 }} />
+                                             </button>
+                                          </td>
+                                       </tr>
+                                    );
+                                 })}
+                              </tbody>
+                           </table>
+                        </div>
+                        <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,.01)' }}>
+                           <button type="button" onClick={handleAddItem}
+                              style={{ padding: '7px 14px', borderRadius: 8, border: '1px dashed ' + N.border, background: 'rgba(201,168,76,.05)', color: N.gold, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <Plus style={{ width: 14, height: 14 }} /> Add Row
+                           </button>
+                        </div>
+                     </div>
+
+                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ width: '100%', maxWidth: 360, background: 'rgba(201,168,76,.04)', border: '1px solid ' + N.border, borderRadius: 12, padding: 16 }}>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 13 }}>
+                              <span style={{ color: N.textSub }}>Subtotal:</span>
+                              <span style={{ fontWeight: 800, color: N.text, fontFamily: 'monospace' }}>৳ {subtotal.toFixed(2)}</span>
+                           </div>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: N.gold, fontSize: 13, fontWeight: 700 }}>
+                                 <input type="checkbox" checked={hasDiscount} onChange={e => { setHasDiscount(e.target.checked); if (!e.target.checked) setForm({ ...form, discount: 0 }); }} style={{ accentColor: N.gold }} />
+                                 Apply Discount
+                              </label>
+                              {hasDiscount && (
+                                 <div style={{ display: 'flex', gap: 6 }}>
+                                    <select value={form.discount_type} onChange={e => setForm({ ...form, discount_type: e.target.value })} style={{ ...inp, width: 60, padding: '4px 6px', fontSize: 11, background: N.card2 }}>
+                                       <option value="amount">৳</option>
+                                       <option value="percentage">%</option>
+                                    </select>
+                                    <input type="number" placeholder="Amt" value={form.discount} onChange={e => setForm({ ...form, discount: e.target.value === '' ? '' : Number(e.target.value) })} style={{ ...inp, width: 70, padding: '4px 8px', fontSize: 12, textAlign: 'right', background: N.card2 }} />
+                                 </div>
+                              )}
+                           </div>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid ' + N.borderSub, fontSize: 15, fontWeight: 900 }}>
+                              <span style={{ color: N.text }}>{previousDue > 0 ? 'Current Total:' : 'Total:'}</span>
+                              <span style={{ color: N.goldBr, fontFamily: 'monospace' }}>৳ {total.toFixed(2)}</span>
+                           </div>
+                           {previousDue > 0 && (
+                              <>
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13, color: N.textSub }}>
+                                    <span>Previous Due:</span>
+                                    <span style={{ color: N.red, fontWeight: 800, fontFamily: 'monospace' }}>৳ {previousDue.toFixed(2)}</span>
+                                 </div>
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, marginTop: 10, borderTop: '1px dashed ' + N.borderSub, fontSize: 16, fontWeight: 900 }}>
+                                    <span style={{ color: N.text }}>Grand Total:</span>
+                                    <span style={{ color: N.goldBr, fontFamily: 'monospace' }}>৳ {(total + previousDue).toFixed(2)}</span>
+                                 </div>
+                              </>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
+                     <div style={{ flex: '1 1 300px', background: 'rgba(255,255,255,.02)', border: '1px solid ' + N.borderSub, borderRadius: 12, padding: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                           <input type="checkbox" checked={hasPayment} onChange={e => { setHasPayment(e.target.checked); setForm({ ...form, payment_amount: e.target.checked ? total : 0 }); }} id="pay-cb" style={{ accentColor: N.gold, width: 16, height: 16 }} />
+                           <label htmlFor="pay-cb" style={{ fontSize: 14, fontWeight: 800, color: N.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <Wallet style={{ width: 16, height: 16, color: N.gold }} /> Register Payment
+                           </label>
+                        </div>
+                        {hasPayment && (
+                           <div style={{ background: 'rgba(201,168,76,.03)', padding: 14, borderRadius: 10, border: '1px solid ' + N.border }}>
+                              <label style={lbl}>{activeTab === 'buy' ? 'Paid Upfront Amount' : activeTab === 'sell' ? 'Received Amount' : 'Refund Amount'}</label>
+                              <div style={{ position: 'relative', marginBottom: 16 }}>
+                                 <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: N.gold }}>৳</span>
+                                 <input type="number" min="0" max={total} value={form.payment_amount === 0 && !hasPayment ? '' : form.payment_amount} onChange={e => handlePaymentAmountChange(e.target.value)}
+                                    style={{ ...inp, paddingLeft: 34, fontSize: 18, fontWeight: 900, color: N.goldBr, background: N.card2 }} />
+                              </div>
+                              {due > 0 && <p style={{ fontSize: 11, fontWeight: 800, color: N.red, textAlign: 'right', marginTop: -10, marginBottom: 14 }}>Remaining Due: ৳ {due.toFixed(2)}</p>}
+
+                              <label style={lbl}>Payment Method</label>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginBottom: 16 }}>
+                                 {['cash', 'bikash', 'nagad', 'rocket', 'upay', 'bank_transfer', 'bank_to_bank_transfer', 'cheque'].map(m => (
+                                    <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 8, background: form.payment_method === m ? 'rgba(201,168,76,.15)' : 'rgba(255,255,255,.04)', border: '1px solid ' + (form.payment_method === m ? N.gold : N.borderSub), cursor: 'pointer' }}>
+                                       <input type="radio" value={m} checked={form.payment_method === m} onChange={() => setForm({ ...form, payment_method: m as PaymentMethod })} style={{ display: 'none' }} />
+                                       <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: form.payment_method === m ? N.goldBr : N.textSub }}>{m.replace(/_/g, ' ')}</span>
+                                    </label>
+                                 ))}
+                              </div>
+
+                              <div style={{ borderTop: '1px solid ' + N.borderSub, marginTop: 16 }}>
+                                 {renderPaymentDetails()}
+                              </div>
+                           </div>
+                        )}
+                     </div>
+
+                     <div style={{ flex: '1 1 300px', background: 'rgba(255,255,255,.02)', border: '1px solid ' + N.borderSub, borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column' }}>
+                        <h3 style={{ fontSize: 14, fontWeight: 800, color: N.text, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}><PenTool style={{ width: 15, height: 15, color: N.gold }} /> Signatures</h3>
+                        <div style={{ marginBottom: 16 }}>
+                           <label style={lbl}>Authorized By *</label>
+                           <select required value={form.authorized_signature} onChange={e => setForm({ ...form, authorized_signature: e.target.value })} style={{ ...inp, background: N.card2 }}>
+                              <option value="" disabled>-- Select Employee --</option>
+                              {employees.filter(emp => emp.is_authorizer).map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
+                           </select>
+                        </div>
+                        <div style={{ marginBottom: 24 }}>
+                           <label style={lbl}>Received / Handled By *</label>
+                           <input required type="text" placeholder="e.g. Courier or Employee Name" value={form.received_by} onChange={e => setForm({ ...form, received_by: e.target.value })} style={inp} />
+                        </div>
+
+                        <div style={{ marginTop: 'auto' }}>
+                           <button type="submit" disabled={submitting}
+                              style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')', color: '#0a0900', fontWeight: 900, fontSize: 15, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, boxShadow: '0 4px 14px rgba(201,168,76,.35)', opacity: submitting ? .6 : 1 }}>
+                              <CheckCircle style={{ width: 20, height: 20 }} />
+                              {submitting ? 'Processing...' : (activeTab === 'buy' ? 'Confirm Purchase' : activeTab === 'sell' ? 'Confirm Sale' : 'Process Return')}
+                           </button>
+                        </div>
+                     </div>
+                  </div>
+               </form>
+            </div>
+         )}
+
+         {viewingInvoice && <InvoiceViewModal invoice={viewingInvoice} onClose={() => setViewingInvoice(null)} />}
+      </div>
+   );
+}
+
+function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => void }) {
+   const [items, setItems] = useState<any[]>([]);
+   const [loading, setLoading] = useState(true);
+
+   const N = {
+     bg: '#0b0f1a', card: '#131929', card2: '#1a2235',
+     gold: '#c9a84c', goldBr: '#f0c040', goldFt: 'rgba(201,168,76,.10)',
+     border: 'rgba(201,168,76,.18)', borderSub: 'rgba(255,255,255,.06)',
+     text: '#e8eaf0', textSub: 'rgba(255,255,255,.45)', textMut: 'rgba(255,255,255,.28)',
+     green: '#34d399', red: '#f87171', blue: '#60a5fa', orange: '#fb923c'
+   };
+
+   useEffect(() => {
+      async function fetchDetails() {
+         const { data } = await supabase.from('invoice_items').select('*, products(name, unit)').eq('invoice_id', invoice.id);
+         setItems(data || []);
+         setLoading(false);
+      }
+      fetchDetails();
+   }, [invoice.id]);
+
+   return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(5px)', padding: 16 }}>
+         <div style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 20, width: '100%', maxWidth: 840, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.8)' }}>
+            <div style={{ padding: '20px 24px', background: 'linear-gradient(135deg, rgba(201,168,76,.15), rgba(201,168,76,.05))', borderBottom: '1px solid ' + N.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: N.gold }}>
+                     {invoice.type === 'buy' ? 'Purchase Invoice' : invoice.type === 'sell' ? 'Sales Invoice' : 'Return Invoice'}
+                  </p>
+                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: N.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+                     <FileText style={{ width: 20, height: 20, color: N.goldBr }} /> #{invoice.id.substring(0, 8).toUpperCase()}
+                  </h2>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: N.textSub }}>{new Date(invoice.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+               </div>
+               <button onClick={onClose} style={{ background: 'rgba(255,255,255,.05)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: N.textMut }}>
+                  <Eye style={{ width: 16, height: 16 }} />
+               </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
+                  <div style={{ background: 'rgba(255,255,255,.02)', padding: 16, borderRadius: 12, border: '1px solid ' + N.borderSub }}>
+                     <h3 style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 800, color: N.textMut, textTransform: 'uppercase', letterSpacing: '.05em' }}>{invoice.type === 'buy' ? 'Supplier' : 'Customer'}</h3>
+                     <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: N.text }}>{invoice.contacts?.name || 'Unknown'}</p>
+                     {invoice.contacts?.shop_name && <p style={{ margin: '4px 0 0', fontSize: 12, color: N.gold }}>{invoice.contacts.shop_name}</p>}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,.02)', padding: 16, borderRadius: 12, border: '1px solid ' + N.borderSub }}>
+                     <h3 style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 800, color: N.textMut, textTransform: 'uppercase', letterSpacing: '.05em' }}>Payment Status</h3>
+                     <span style={{
+                        display: 'inline-flex', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em',
+                        background: invoice.payment_status === 'paid' ? 'rgba(52,211,153,.1)' : invoice.payment_status === 'partial' ? 'rgba(201,168,76,.1)' : 'rgba(248,113,113,.1)',
+                        color: invoice.payment_status === 'paid' ? N.green : invoice.payment_status === 'partial' ? N.gold : N.red,
+                        border: '1px solid ' + (invoice.payment_status === 'paid' ? 'rgba(52,211,153,.2)' : invoice.payment_status === 'partial' ? 'rgba(201,168,76,.2)' : 'rgba(248,113,113,.2)')
+                     }}>
+                        {invoice.payment_status}
+                     </span>
+                     {invoice.authorized_signature && <p style={{ margin: '8px 0 0', fontSize: 11, color: N.textSub }}>Auth by: {invoice.authorized_signature}</p>}
+                  </div>
+               </div>
+
+               <div style={{ background: N.card2, borderRadius: 12, border: '1px solid ' + N.borderSub, overflow: 'hidden', marginBottom: 24 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                     <thead>
+                        <tr style={{ background: 'rgba(201,168,76,.06)' }}>
+                           <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Product</th>
+                           <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Qty</th>
+                           <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Price</th>
+                           <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Subtotal</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        {loading ? (
+                           <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: N.gold, fontSize: 13, fontWeight: 600 }}>Loading items...</td></tr>
+                        ) : items.length === 0 ? (
+                           <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: N.textMut, fontSize: 13 }}>No items found.</td></tr>
+                        ) : items.map((item, idx) => (
+                           <tr key={idx} style={{ borderBottom: idx < items.length - 1 ? '1px solid ' + N.borderSub : 'none' }}>
+                              <td style={{ padding: '12px 16px', fontSize: 13, color: N.text, fontWeight: 600 }}>
+                                 {item.products?.name || 'Unknown'}
+                                 {item.selected_head && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, fontSize: 10, background: 'rgba(255,255,255,.05)', color: N.textSub }}>{item.selected_head}</span>}
+                              </td>
+                              <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, color: N.text }}>{item.quantity} <span style={{ fontSize: 11, color: N.textMut }}>{item.products?.unit || ''}</span></td>
+                              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: N.textSub }}>৳ {Number(item.price).toLocaleString()}</td>
+                              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: N.goldBr }}>৳ {Number(item.subtotal).toLocaleString()}</td>
+                           </tr>
+                        ))}
+                     </tbody>
+                  </table>
+               </div>
+
+               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ width: 340, background: 'rgba(255,255,255,.02)', borderRadius: 12, padding: 20, border: '1px solid ' + N.borderSub }}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 13, color: N.textSub }}>
+                        <span>Subtotal:</span>
+                        <span style={{ fontFamily: 'monospace', color: N.text, fontWeight: 700 }}>৳ {Number(invoice.subtotal).toLocaleString()}</span>
+                     </div>
+                     {Number(invoice.discount) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: 13, color: N.gold }}>
+                           <span>Discount:</span>
+                           <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>- ৳ {Number(invoice.discount).toLocaleString()}</span>
+                        </div>
+                     )}
+                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid ' + N.borderSub, fontSize: 18, fontWeight: 900, color: N.text }}>
+                        <span>Total:</span>
+                        <span style={{ fontFamily: 'monospace', color: N.goldBr }}>৳ {Number(invoice.total).toLocaleString()}</span>
+                     </div>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: '1px dashed ' + N.borderSub, fontSize: 13, fontWeight: 800, color: N.green }}>
+                        <span>Paid:</span>
+                        <span style={{ fontFamily: 'monospace' }}>৳ {Number(invoice.paid_amount).toLocaleString()}</span>
+                     </div>
+                     {Number(invoice.due_amount) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13, fontWeight: 800, color: N.red }}>
+                           <span>Due:</span>
+                           <span style={{ fontFamily: 'monospace' }}>৳ {Number(invoice.due_amount).toLocaleString()}</span>
+                        </div>
+                     )}
+                  </div>
+               </div>
+            </div>
+
+            <div style={{ padding: '16px 24px', background: 'rgba(255,255,255,.02)', borderTop: '1px solid ' + N.borderSub, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+               <button style={{ padding: '10px 20px', borderRadius: 10, border: '1px dashed ' + N.border, background: 'rgba(201,168,76,.05)', color: N.gold, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Print Invoice</button>
+               <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid ' + N.borderSub, background: 'transparent', color: N.text, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Close</button>
+            </div>
+         </div>
+      </div>
+   );
+}
+`;
+
+lines.splice(0, 316, ...topParts);
+const finalContent = topParts.join('\n') + '\n' + newContent;
+
+fs.writeFileSync(path, finalContent, 'utf8');
+console.log('Successfully updated invoice page!');
