@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import { Sidebar } from '@/components/Sidebar';
 import { AuthProvider } from '@/components/AuthProvider';
@@ -66,8 +67,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <InstallPrompt />
 
-          {/* Sidebar: desktop=static, mobile=overlay drawer */}
-          <Sidebar />
+          <Suspense fallback={<div className="hidden lg:block w-[250px] bg-[#0d1220]" />}>
+            <Sidebar />
+          </Suspense>
 
           {/* Main content area */}
           <main className="flex-1 overflow-y-auto w-full min-w-0" style={{ background: '#0b0f1a' }}>
