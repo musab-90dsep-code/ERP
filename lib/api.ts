@@ -74,6 +74,7 @@ export const api = {
   getAttendance: (params?: any) => unifiedApiCall('attendance', 'list', undefined, params),
   markAttendance: (data: Record<string, any>) => unifiedApiCall('attendance', 'create', undefined, data),
   bulkMarkAttendance: (data: Record<string, any>[]) => Promise.all(data.map(d => unifiedApiCall('attendance', 'create', undefined, d))),
+  deleteAttendance: (id: string) => unifiedApiCall('attendance', 'delete', id),
 
   // ─── EMPLOYEE TRANSACTIONS ─────────────────────────────────────────────────
   getEmployeeTransactions: (params?: any) => unifiedApiCall('employee_transaction', 'list', undefined, { ...params, employee: params?.employee_id }),
