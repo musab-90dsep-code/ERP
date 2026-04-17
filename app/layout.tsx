@@ -52,20 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="msapplication-TileColor" content="#c9a84c" />
         <meta name="msapplication-TileImage" content="/icon-192.png" />
 
-        {/* Register Service Worker */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js')
-                    .then(function(reg) { console.log('SW registered:', reg.scope); })
-                    .catch(function(err) { console.log('SW registration failed:', err); });
-                });
-              }
-            `,
-          }}
-        />
+
       </head>
       <body
         className="flex h-screen overflow-hidden"

@@ -5,8 +5,13 @@ import withPWAInit from '@ducanh2912/next-pwa';
 // PWA কনফিগারেশন সেটআপ (swcMinify রিমুভ করা হয়েছে)
 const withPWA = withPWAInit({
   dest: 'public',
-  disable: process.env.NODE_ENV === 'development',
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
+  disable: false,
+  workboxOptions: {
+    disableDevLogs: true,
+  },
 });
 
 const nextConfig: NextConfig = {
