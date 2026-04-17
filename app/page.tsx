@@ -118,7 +118,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 mb-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400" />
             <span className="text-xs font-bold tracking-[0.2em] text-[#8a95a8] uppercase">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {loading ? '...' : new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
           </div>
           <h1 className="flex items-center gap-3 text-3xl font-black text-[#c9a84c] tracking-tight">
@@ -151,9 +151,11 @@ export default function Dashboard() {
             <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] flex flex-col justify-between overflow-hidden relative">
               <div>
                 <div className="text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-1">TOTAL BALANCE</div>
-                <div className="text-2xl font-black text-white mb-1">৳{Math.abs(totalBalance).toLocaleString()}</div>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
-                  <TrendingUp className="w-3 h-3" /> Positive
+                <div className={`text-2xl font-black mb-1 ${totalBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                  {totalBalance < 0 ? '-' : ''}৳{Math.abs(totalBalance).toLocaleString()}
+                </div>
+                <div className={`flex items-center gap-1 text-[11px] font-bold ${totalBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {totalBalance >= 0 ? <><TrendingUp className="w-3 h-3" /> Surplus (Positive)</> : <><TrendingDown className="w-3 h-3" /> Deficit (Negative)</>}
                 </div>
               </div>
               <div className="mt-6 flex items-end gap-1 h-12">

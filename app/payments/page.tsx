@@ -33,7 +33,7 @@ function PaymentsContent() {
 
   const [form, setForm] = useState({
     contact_id: '',
-    date: new Date().toISOString().split('T')[0],
+    date: '', // Initialize empty to avoid hydration mismatch
     amount: '',
     method: 'cash' as PaymentMethod,
     details: {
@@ -60,7 +60,11 @@ function PaymentsContent() {
 
   useEffect(() => {
     if (!form.details.memo_no) {
-      setForm(prev => ({ ...prev, details: { ...prev.details, memo_no: generateMemoNo() } }));
+      setForm(prev => ({ 
+        ...prev, 
+        date: prev.date || new Date().toISOString().split('T')[0],
+        details: { ...prev.details, memo_no: generateMemoNo() } 
+      }));
     }
     const tab = searchParams.get('tab');
     if (tab === 'in' || tab === 'out') {

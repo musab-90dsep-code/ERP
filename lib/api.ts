@@ -139,6 +139,12 @@ export const api = {
   updateDailyExpense: (id: string, data: Record<string, any>) => unifiedApiCall('daily_expense', 'update', id, data),
   deleteDailyExpense: (id: string) => unifiedApiCall('daily_expense', 'delete', id),
 
+  // ─── ADD MONEY ────────────────────────────────────────────────────────────
+  getAddMoney: (params?: any) => unifiedApiCall('add_money', 'list', undefined, params),
+  createAddMoney: (data: Record<string, any>) => unifiedApiCall('add_money', 'create', undefined, data),
+  updateAddMoney: (id: string, data: Record<string, any>) => unifiedApiCall('add_money', 'update', id, data),
+  deleteAddMoney: (id: string) => unifiedApiCall('add_money', 'delete', id),
+
   // ─── PROCESSING ORDERS ─────────────────────────────────────────────────────
   getProcessingOrders: (params?: any) => unifiedApiCall('processing_order', 'list', undefined, params),
   getProcessingBalances: () => unifiedApiCall('processing_order', 'balances'),

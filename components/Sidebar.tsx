@@ -64,6 +64,7 @@ const navItems = [
     subItems: [
       { name: 'Make a Receipt', href: '/expenses?tab=make' },
       { name: 'Pay for Receipt', href: '/expenses?tab=pay' },
+      { name: 'Add Money', href: '/expenses?tab=add_money' },
     ]
   },
   {
@@ -91,22 +92,27 @@ export function Sidebar() {
   const [isInstalled, setIsInstalled] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
 
-  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
-    Inventory: pathname.startsWith('/stock'),
-    Invoices: pathname.startsWith('/invoices'),
-    Contacts: pathname.startsWith('/contacts'),
-    Employees: pathname.startsWith('/employees'),
-    Orders: pathname.startsWith('/orders'),
-    Processing: pathname.startsWith('/processing'),
-    Expenses: pathname.startsWith('/expenses'),
-    Payments: pathname.startsWith('/payments'),
-  });
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
 
   const isMobile = useIsMobile();
   const minimized = !isMobile && isMinimized;
 
   useEffect(() => { setMobileOpen(false); }, [pathname, searchParams]);
   useEffect(() => { if (!isMobile) setMobileOpen(false); }, [isMobile]);
+
+  useEffect(() => {
+    // Initial dropdown state based on current path
+    setOpenDropdowns({
+      Inventory: pathname.startsWith('/stock'),
+      Invoices: pathname.startsWith('/invoices'),
+      Contacts: pathname.startsWith('/contacts'),
+      Employees: pathname.startsWith('/employees'),
+      Orders: pathname.startsWith('/orders'),
+      Processing: pathname.startsWith('/processing'),
+      Expenses: pathname.startsWith('/expenses'),
+      Payments: pathname.startsWith('/payments'),
+    });
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia('(display-mode: standalone)').matches) {

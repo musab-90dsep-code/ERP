@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import {
    ReceiptText, Banknote, Calendar as CalendarIcon, CheckCircle2,
-   X, AlertCircle, Plus, Hash, Tag, PenTool, UserCheck, Eye, UploadCloud
+   X, AlertCircle, Plus, Hash, Tag, PenTool, UserCheck, Eye, UploadCloud,
+   Wallet, Landmark, Building2, CreditCard, ArrowRightLeft, Store, Users, Ticket, Info
 } from 'lucide-react';
 
 function ExpensesContent() {
@@ -40,10 +41,66 @@ function ExpensesContent() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [viewingExpense, setViewingExpense] = useState<any | null>(null);
 
+   // "Add Money" states
+   const generateAddMoneyMemo = () => `ADM-${Math.floor(100000 + Math.random() * 900000)}`;
+   const [addMoneyList, setAddMoneyList] = useState<any[]>([]);
+   const [internalAccounts, setInternalAccounts] = useState<any[]>([]);
+   const [contacts, setContacts] = useState<any[]>([]);
+   const [addMoneyForm, setAddMoneyForm] = useState({
+      memo_no: generateAddMoneyMemo(),
+      date: new Date().toISOString().split('T')[0],
+      purpose: '',
+      amount: '',
+      note: '',
+      payment_method: 'cash',
+      payment_method_details: {
+         memo_no: '',
+         number: '', 
+         transaction_id: '',
+         bank_name: '',
+         account_name: '',
+         account_number: '',
+         branch: '',
+         datetime: '',
+         cheque_number: '',
+         cheque_date: '',
+         internal_account_id: ''
+      },
+      authorized_signature: ''
+   });
+   const [addMoneyPhotos, setAddMoneyPhotos] = useState<File[]>([]);
+   const [addMoneyPreviews, setAddMoneyPreviews] = useState<string[]>([]);
+
    useEffect(() => {
       fetchExpenses();
       fetchEmployees();
+      if (tab === 'add_money') {
+         fetchAddMoney();
+         fetchInternalAccounts();
+         fetchContacts();
+      }
    }, [tab]);
+
+   const fetchInternalAccounts = async () => {
+      try {
+         const data = await api.getInternalAccounts({ ordering: 'provider_name' });
+         setInternalAccounts(Array.isArray(data) ? data : data.results ?? []);
+      } catch (err) { console.error('fetchInternalAccounts:', err); }
+   };
+
+   const fetchContacts = async () => {
+      try {
+         const data = await api.getContacts({ ordering: 'name' });
+         setContacts(Array.isArray(data) ? data : data.results ?? []);
+      } catch (err) { console.error('fetchContacts:', err); }
+   };
+
+   const fetchAddMoney = async () => {
+      try {
+         const data = await api.getAddMoney({ ordering: '-created_at' });
+         setAddMoneyList(Array.isArray(data) ? data : data.results ?? []);
+      } catch (err) { console.error('fetchAddMoney:', err); }
+   };
 
    const fetchEmployees = async () => {
       try {
@@ -141,6 +198,134 @@ function ExpensesContent() {
       setPhotoPreviews(prev => [...prev.filter((_, i) => i !== index)]);
    };
 
+   const handleAddMoneySubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!addMoneyForm.purpose || !addMoneyForm.amount || !addMoneyForm.authorized_signature) {
+         alert('Please fill out all required fields.');
+         return;
+      }
+      setIsSubmitting(true);
+      try {
+         const uploadedUrls = addMoneyPhotos.length > 0
+            ? await Promise.all(addMoneyPhotos.map((file) => api.uploadFile(file)))
+            : [];
+
+         const payload = {
+            ...addMoneyForm,
+            amount: Number(addMoneyForm.amount),
+            photo_urls: uploadedUrls,
+         };
+         
+         await api.createAddMoney(payload);
+         alert('Money added successfully!');
+         setAddMoneyForm({
+            ...addMoneyForm,
+            memo_no: generateAddMoneyMemo(),
+            purpose: '',
+            amount: '',
+            note: '',
+            payment_method: 'cash',
+            payment_method_details: { ...addMoneyForm.payment_method_details, memo_no: generateAddMoneyMemo() }
+         });
+         setAddMoneyPhotos([]);
+         setAddMoneyPreviews([]);
+         fetchAddMoney();
+      } catch (err) {
+         console.error(err);
+         alert('Failed to save record.');
+      } finally {
+         setIsSubmitting(false);
+      }
+   };
+
+   const handleAddMoneyPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files) {
+         const filesArray = Array.from(e.target.files);
+         if (addMoneyPhotos.length + filesArray.length > 5) {
+            alert('Max 5 photos allowed.');
+            return;
+         }
+         setAddMoneyPhotos(prev => [...prev, ...filesArray]);
+         setAddMoneyPreviews(prev => [...prev, ...filesArray.map(f => URL.createObjectURL(f))]);
+      }
+   };
+
+   const removeAddMoneyPhoto = (index: number) => {
+      setAddMoneyPhotos(prev => prev.filter((_, i) => i !== index));
+      setAddMoneyPreviews(prev => prev.filter((_, i) => i !== index));
+   };
+
+   const renderPaymentMethodForm = () => {
+      const m = addMoneyForm.payment_method;
+      const details = addMoneyForm.payment_method_details;
+      const setDetails = (d: any) => setAddMoneyForm({ ...addMoneyForm, payment_method_details: { ...details, ...d } });
+
+      if (['bikash', 'nagad', 'rocket', 'upay'].includes(m)) {
+         return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#1a2235]/40 rounded-xl border border-[rgba(255,255,255,0.06)]">
+               <div className="col-span-1 sm:col-span-2">
+                  <label className={C.label}>Receiving To (Your Account)</label>
+                  <select required value={details.internal_account_id} onChange={e => setDetails({ internal_account_id: e.target.value })} className={C.input}>
+                     <option value="" disabled>Select your {m} account</option>
+                     {internalAccounts.filter(acc => acc.account_type === 'wallet' && acc.provider_name.toLowerCase() === m.toLowerCase()).map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                     ))}
+                  </select>
+               </div>
+               <div>
+                  <label className={C.label}>Send Number</label>
+                  <input required placeholder="+8801..." type="text" value={details.number} onChange={e => setDetails({ number: e.target.value })} className={C.input} />
+               </div>
+               <div>
+                  <label className={C.label}>Transaction ID</label>
+                  <input required placeholder="TRX..." type="text" value={details.transaction_id} onChange={e => setDetails({ transaction_id: e.target.value })} className={C.input} />
+               </div>
+            </div>
+         );
+      }
+
+      if (m === 'bank_transfer' || m === 'bank_to_bank_transfer') {
+         return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#1a2235]/40 rounded-xl border border-[rgba(255,255,255,0.06)]">
+               <div className="col-span-1 sm:col-span-2">
+                  <label className={C.label}>Your Receiving Bank Account</label>
+                  <select required value={details.internal_account_id} onChange={e => setDetails({ internal_account_id: e.target.value })} className={C.input}>
+                     <option value="" disabled>Select your Bank Account</option>
+                     {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+                     ))}
+                  </select>
+               </div>
+               <div className="col-span-1 sm:col-span-2">
+                  <label className={C.label}>Transfer Date & Time</label>
+                  <input required type="datetime-local" value={details.datetime} onChange={e => setDetails({ datetime: e.target.value })} className={C.input} />
+               </div>
+            </div>
+         );
+      }
+
+      if (m === 'cheque') {
+         return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#1a2235]/40 rounded-xl border border-[rgba(255,255,255,0.06)]">
+               <div>
+                  <label className={C.label}>Cheque Number</label>
+                  <input required type="text" value={details.cheque_number} onChange={e => setDetails({ cheque_number: e.target.value })} className={C.input} />
+               </div>
+               <div>
+                  <label className={C.label}>Cheque Date</label>
+                  <input required type="date" value={details.cheque_date} onChange={e => setDetails({ cheque_date: e.target.value })} className={C.input} />
+               </div>
+               <div className="col-span-1 sm:col-span-2">
+                  <label className={C.label}>Bank Name</label>
+                  <input required type="text" value={details.bank_name} onChange={e => setDetails({ bank_name: e.target.value })} className={C.input} />
+               </div>
+            </div>
+         );
+      }
+
+      return null;
+   };
+
    const pendingExpenses = expenses.filter(e => e.status === 'pending');
    const paidExpenses = expenses.filter(e => e.status === 'paid');
 
@@ -161,13 +346,184 @@ function ExpensesContent() {
                   <ReceiptText className="w-4 h-4" /> Daily Expenses
                </p>
                <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2">
-                  {tab === 'pay' ? 'Pay for Receipt' : 'Make a Receipt'}
+                  {tab === 'pay' ? 'Pay for Receipt' : tab === 'add_money' ? 'Add Money' : 'Make a Receipt'}
                </h1>
                <p className="text-[#8a95a8] max-w-xl text-sm md:text-base font-medium">
-                  {tab === 'pay' ? 'Authorize, append proof, and pay for pending petty-cash expenses.' : 'Log operational items and generate a new expense layout.'}
+                  {tab === 'pay' ? 'Authorize, append proof, and pay for pending petty-cash expenses.' : 
+                   tab === 'add_money' ? 'Record fund injections or income into the petty cash system.' : 
+                   'Log operational items and generate a new expense layout.'}
                </p>
             </div>
          </div>
+
+         {tab === 'add_money' && (
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 animate-in slide-in-from-bottom-5 duration-500">
+               <div className={`xl:col-span-12 ${C.card} p-6 md:p-10`}>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 border-b border-[rgba(255,255,255,0.06)] pb-8">
+                     <div>
+                        <h2 className="text-2xl font-black text-[#e8eaf0] flex items-center gap-3">
+                           <Landmark className="w-7 h-7 text-[#c9a84c]" /> Add Business Capital / Fund
+                        </h2>
+                        <p className="text-[#8a95a8] text-sm mt-1 font-medium">Log money added to the system for petty cash or other purposes.</p>
+                     </div>
+                     <div className="bg-[#1a2235]/40 border border-[rgba(201,168,76,0.18)] px-5 py-3 rounded-2xl flex flex-col items-center">
+                        <span className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-1 leading-none">Memo No</span>
+                        <span className="text-lg font-mono font-black text-[#c9a84c] tracking-wider">{addMoneyForm.memo_no}</span>
+                     </div>
+                  </div>
+
+                  <form onSubmit={handleAddMoneySubmit} className="space-y-8">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                           <div>
+                              <label className={C.label}>Purpose / Title *</label>
+                              <div className="relative">
+                                 <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c9a84c] opacity-50" />
+                                 <input required type="text" placeholder="e.g. Funding for Petty Cash, Capital Injection" value={addMoneyForm.purpose} onChange={e => setAddMoneyForm({...addMoneyForm, purpose: e.target.value})} className={`${C.input} pl-10`} />
+                              </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                 <label className={C.label}>Amount (৳) *</label>
+                                 <div className="relative">
+                                    <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#c9a84c]" />
+                                    <input required type="number" step="0.01" min="0.01" placeholder="0.00" value={addMoneyForm.amount} onChange={e => setAddMoneyForm({...addMoneyForm, amount: e.target.value})} className={`${C.input} pl-10 text-lg font-mono text-[#c9a84c]`} />
+                                 </div>
+                              </div>
+                              <div>
+                                 <label className={C.label}>Date *</label>
+                                 <input required type="date" value={addMoneyForm.date} onChange={e => setAddMoneyForm({...addMoneyForm, date: e.target.value})} className={C.input} />
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="space-y-6">
+                           <div>
+                              <label className={C.label}>Note (Optional)</label>
+                              <textarea rows={4} placeholder="Detailed description of where this fund came from..." value={addMoneyForm.note} onChange={e => setAddMoneyForm({...addMoneyForm, note: e.target.value})} className={`${C.input} resize-none`} />
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                        <div className="bg-[#1a2235]/20 p-6 rounded-2xl border border-[rgba(255,255,255,0.06)] shadow-inner">
+                           <h3 className="text-sm font-black text-[#c9a84c] uppercase tracking-widest mb-6 flex items-center gap-2">
+                              <CreditCard className="w-4 h-4" /> Payment Definition
+                           </h3>
+                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {['cash', 'bikash', 'nagad', 'rocket', 'upay', 'bank_transfer', 'bank_to_bank_transfer', 'cheque'].map(m => (
+                                 <label key={m} className={`flex items-center justify-center p-3 rounded-xl border text-center cursor-pointer transition-all ${addMoneyForm.payment_method === m ? 'bg-[#c9a84c]/10 border-[#c9a84c] text-[#c9a84c]' : 'bg-[#131929]/50 border-[rgba(255,255,255,0.06)] text-[#8a95a8] hover:bg-[#1a2235]'}`}>
+                                    <input type="radio" value={m} checked={addMoneyForm.payment_method === m} onChange={() => setAddMoneyForm({...addMoneyForm, payment_method: m})} className="hidden" />
+                                    <span className="text-[10px] font-black uppercase tracking-tighter">{m.replace(/_/g, ' ')}</span>
+                                 </label>
+                              ))}
+                           </div>
+                           {renderPaymentMethodForm()}
+                        </div>
+
+                        <div className="flex flex-col gap-6">
+                           <div className="flex-1 bg-[#1a2235]/20 p-6 rounded-2xl border border-[rgba(255,255,255,0.06)] shadow-inner">
+                              <h3 className="text-sm font-black text-[#c9a84c] uppercase tracking-widest mb-4 flex items-center gap-2">
+                                 <UploadCloud className="w-4 h-4" /> Proof Document / Image
+                              </h3>
+                              <div className="flex flex-wrap gap-3">
+                                 {addMoneyPreviews.map((src, idx) => (
+                                    <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-[#c9a84c]/30">
+                                       <img src={src} className="w-full h-full object-cover" alt="preview" />
+                                       <button type="button" onClick={() => removeAddMoneyPhoto(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"><X className="w-3 h-3"/></button>
+                                    </div>
+                                 ))}
+                                 {addMoneyPreviews.length < 5 && (
+                                    <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-[#c9a84c]/30 rounded-xl cursor-pointer hover:bg-[#c9a84c]/5 translate-all">
+                                       <Plus className="w-6 h-6 text-[#c9a84c]" />
+                                       <input type="file" multiple accept="image/*" className="hidden" onChange={handleAddMoneyPhotoChange} />
+                                    </label>
+                                 )}
+                              </div>
+                           </div>
+
+                           <div>
+                              <label className={C.label}>Authorized By *</label>
+                              <select required value={addMoneyForm.authorized_signature} onChange={e => setAddMoneyForm({...addMoneyForm, authorized_signature: e.target.value})} className={C.input}>
+                                 <option value="" disabled>-- Select Authorizer --</option>
+                                 {employees.filter(e => e.is_authorizer).map(emp => (
+                                    <option key={emp.id} value={emp.name}>{emp.name}</option>
+                                 ))}
+                              </select>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="pt-8 border-t border-[rgba(255,255,255,0.06)] flex justify-end gap-4">
+                        <button type="button" onClick={() => setAddMoneyForm({...addMoneyForm, purpose: '', amount: '', note: ''})} className="px-8 py-4 font-bold text-[#8a95a8] hover:text-[#e8eaf0] transition-colors uppercase tracking-widest text-xs">Reset Form</button>
+                        <button type="submit" disabled={isSubmitting} className="px-10 py-4 bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] font-black rounded-2xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 text-lg uppercase">
+                           {isSubmitting ? 'Saving...' : <><Landmark className="w-6 h-6" /> Save Transaction</>}
+                        </button>
+                     </div>
+                  </form>
+               </div>
+
+               {/* Add Money History List Below */}
+               <div className={`xl:col-span-12 mt-4 ${C.card} overflow-hidden bg-[#131929]`}>
+                  <div className="p-6 border-b border-[rgba(255,255,255,0.06)] flex justify-between items-center bg-[#1a2235]/30">
+                     <h3 className="font-black text-[#e8eaf0] text-lg flex items-center gap-3"><ArrowRightLeft className="w-5 h-5 text-[#c9a84c]" /> Add Money History</h3>
+                     <span className="bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{addMoneyList.length} Total Records</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-left">
+                        <thead className="bg-[#131929] border-b border-[rgba(201,168,76,0.18)] text-[#8a95a8] text-[10px] font-black uppercase tracking-widest">
+                           <tr>
+                              <th className="px-6 py-4">Memo / Date</th>
+                              <th className="px-6 py-4">Purpose / Source</th>
+                              <th className="px-6 py-4">Payment Info</th>
+                              <th className="px-6 py-4 text-right">Amount (৳)</th>
+                              <th className="px-6 py-4">Auth Sign</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[rgba(255,255,255,0.06)]">
+                           {addMoneyList.map(item => (
+                              <tr key={item.id} className="hover:bg-[#1a2235]/40 transition-colors">
+                                 <td className="px-6 py-6">
+                                    <div className="font-mono text-[11px] font-black text-[#c9a84c] bg-[#c9a84c]/5 border border-[#c9a84c]/20 inline-block px-2.5 py-1 rounded-lg mb-2 shadow-sm uppercase tracking-wider">{item.memo_no}</div>
+                                    <div className="text-xs text-[#8a95a8] font-bold flex items-center gap-1.5"><CalendarIcon className="w-3 h-3"/> {new Date(item.date).toLocaleDateString()}</div>
+                                 </td>
+                                 <td className="px-6 py-6">
+                                    <div className="font-extrabold text-[#e8eaf0] text-base">{item.purpose}</div>
+                                    {item.note && <div className="text-[10px] text-[#8a95a8] mt-2 italic font-medium max-w-xs">{item.note}</div>}
+                                    {item.photo_urls && item.photo_urls.length > 0 && (
+                                       <div className="flex gap-2 mt-3">
+                                          {item.photo_urls.map((u: string, i: number) => (
+                                             <a key={i} href={u} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-lg overflow-hidden border border-[#c9a84c]/30 block shadow-sm"><img src={u} className="w-full h-full object-cover" alt="Proof"/></a>
+                                          ))}
+                                       </div>
+                                    )}
+                                 </td>
+                                 <td className="px-6 py-6">
+                                    <span className="text-[10px] px-2.5 py-1 bg-[#c9a84c]/5 text-[#c9a84c] border border-[#c9a84c]/20 rounded-md font-black uppercase tracking-widest inline-block mb-2 shadow-sm">{item.payment_method.replace('_', ' ')}</span>
+                                    {item.payment_method_details && item.payment_method_details.internal_account_id && (
+                                       <div className="text-[10px] font-bold text-[#8a95a8] flex flex-col gap-0.5">
+                                          {internalAccounts.find(a => a.id === item.payment_method_details.internal_account_id)?.provider_name}
+                                          <span className="font-mono text-[#c9a84c]">{internalAccounts.find(a => a.id === item.payment_method_details.internal_account_id)?.account_number}</span>
+                                       </div>
+                                    )}
+                                 </td>
+                                 <td className="px-6 py-6 text-right">
+                                    <span className="font-black text-2xl text-[#c9a84c] font-mono drop-shadow-sm">{Number(item.amount).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                                 </td>
+                                 <td className="px-6 py-6">
+                                    <div className="flex items-center gap-2 text-xs font-black text-[#e8eaf0] uppercase tracking-wider"><PenTool className="w-3.5 h-3.5 text-[#c9a84c]"/> {item.authorized_signature}</div>
+                                 </td>
+                              </tr>
+                           ))}
+                           {addMoneyList.length === 0 && (
+                              <tr><td colSpan={5} className="py-20 text-center text-[#8a95a8] text-sm font-medium italic">No fund records found yet. Record your first fund injection above.</td></tr>
+                           )}
+                        </tbody>
+                     </table>
+                  </div>
+               </div>
+            </div>
+         )}
 
          {tab === 'make' && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
