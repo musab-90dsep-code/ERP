@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 /* ─────────────────────────────────────────────
    DESIGN TOKENS — DARK NAVY + GOLDEN THEME
@@ -31,7 +30,7 @@
 html { font-size: 16px; -webkit-font-smoothing: antialiased; }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-inter, system-ui, sans-serif);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;

@@ -15,7 +15,7 @@ const BASE_URL = rawBaseUrl && rawBaseUrl !== ''
 
 async function unifiedApiCall<T = any>(
   model: string,
-  action: 'list' | 'retrieve' | 'create' | 'update' | 'delete' | 'bulk_delete' | 'balances' | 'due' | 'stats',
+  action: 'list' | 'retrieve' | 'create' | 'update' | 'delete' | 'bulk_delete' | 'balances' | 'due' | 'stats' | 'cashbook_logs',
   id?: string,
   data?: Record<string, any> | FormData
 ): Promise<T> {
@@ -62,6 +62,7 @@ export const api = {
 
   // ─── DASHBOARD ─────────────────────────────────────────────────────────────
   getDashboardStats: () => unifiedApiCall('product', 'stats'), // Model doesn't matter for custom 'stats' action
+  getCashbookLogs: () => unifiedApiCall('product', 'cashbook_logs'), // Custom 'cashbook_logs' action
 
   // ─── EMPLOYEES ─────────────────────────────────────────────────────────────
   getEmployees: (params?: any) => unifiedApiCall('employee', 'list', undefined, params),

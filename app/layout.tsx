@@ -1,9 +1,17 @@
 import type { Metadata, Viewport } from 'next';
 import { Suspense } from 'react';
-import './globals.css';
+import { Inter } from 'next/font/google';
 import { Sidebar } from '@/components/Sidebar';
 import { AuthProvider } from '@/components/AuthProvider';
 import { InstallPrompt } from '@/components/InstallPrompt';
+import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'ERP Business Manager',
@@ -32,7 +40,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <head>
         {/* PWA / Mobile web meta */}
         <link rel="manifest" href="/manifest.json" />

@@ -21,7 +21,7 @@ function ExpensesContent() {
 
    // "Make" form data
    const [makeData, setMakeData] = useState({
-      invoice_no: generateInvoiceNo(),
+      invoice_no: '',
       date: new Date().toISOString().split('T')[0],
       item_name: '',
       unit: '',
@@ -47,7 +47,7 @@ function ExpensesContent() {
    const [internalAccounts, setInternalAccounts] = useState<any[]>([]);
    const [contacts, setContacts] = useState<any[]>([]);
    const [addMoneyForm, setAddMoneyForm] = useState({
-      memo_no: generateAddMoneyMemo(),
+      memo_no: '',
       date: new Date().toISOString().split('T')[0],
       purpose: '',
       amount: '',
@@ -79,6 +79,10 @@ function ExpensesContent() {
          fetchInternalAccounts();
          fetchContacts();
       }
+      
+      // Initialize IDs on mount to avoid hydration mismatch
+      setMakeData(prev => ({ ...prev, invoice_no: generateInvoiceNo() }));
+      setAddMoneyForm(prev => ({ ...prev, memo_no: generateAddMoneyMemo() }));
    }, [tab]);
 
    const fetchInternalAccounts = async () => {

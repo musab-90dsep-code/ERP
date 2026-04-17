@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [greeting, setGreeting] = useState('');
   const [greetingEmoji, setGreetingEmoji] = useState('👋');
   const [totalBalance, setTotalBalance] = useState(0);
-  const [totalStockValue, setTotalStockValue] = useState(0);
+  const [totalDue, setTotalDue] = useState(0);
   const [salesPeriod, setSalesPeriod] = useState<Period>('month');
   const [expensePeriod, setExpensePeriod] = useState<Period>('month');
   const [salesByPeriod, setSalesByPeriod] = useState<Record<Period, number>>({ day: 0, week: 0, month: 0, year: 0 });
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [expenses_history, setExpensesHistory] = useState<number[]>([]);
   const [balance_history, setBalanceHistory] = useState<number[]>([]);
   const [stock_history, setStockHistory] = useState<number[]>([]);
+  const [due_history, setDueHistory] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
   const getFrom = (p: Period) => {
@@ -61,7 +62,7 @@ export default function Dashboard() {
         setRecentEmployees(dashData.recent_employees ?? []);
         setRecentInvoices(dashData.recent_invoices ?? []);
         setTotalBalance(dashData.total_balance ?? 0);
-        setTotalStockValue(dashData.total_stock_value ?? 0);
+        setTotalDue(dashData.total_due ?? 0);
         setSalesByPeriod(dashData.sales_by_period ?? { day: 0, week: 0, month: 0, year: 0 });
         setExpensesByPeriod(dashData.expenses_by_period ?? { day: 0, week: 0, month: 0, year: 0 });
         setAttendance({
@@ -74,6 +75,7 @@ export default function Dashboard() {
         setExpensesHistory(dashData.expenses_history ?? []);
         setBalanceHistory(dashData.balance_history ?? []);
         setStockHistory(dashData.stock_history_values ?? []);
+        setDueHistory(dashData.due_history ?? []);
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -147,105 +149,159 @@ export default function Dashboard() {
           {/* ── KPI ROW ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
 
-            {/* Total Balance */}
-            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] flex flex-col justify-between overflow-hidden relative">
-              <div>
-                <div className="text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-1">TOTAL BALANCE</div>
-                <div className={`text-2xl font-black mb-1 ${totalBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+            {/* Net Cash Balance */}
+            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col justify-between overflow-hidden relative group hover:border-[rgba(201,168,76,0.2)] transition-all duration-300">
+              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Wallet className="w-12 h-12 text-[#c9a84c]" />
+              </div>
+              <div className="relative z-10">
+                <div className="text-[10px] uppercase font-black text-[#8a95a8] tracking-[0.15em] mb-1 flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-[#c9a84c]" /> Net Cash Balance
+                </div>
+                <div className={`text-2xl font-black mb-1 tracking-tight ${totalBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
                   {totalBalance < 0 ? '-' : ''}৳{Math.abs(totalBalance).toLocaleString()}
                 </div>
-                <div className={`flex items-center gap-1 text-[11px] font-bold ${totalBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {totalBalance >= 0 ? <><TrendingUp className="w-3 h-3" /> Surplus (Positive)</> : <><TrendingDown className="w-3 h-3" /> Deficit (Negative)</>}
+                <div className={`flex items-center gap-1 text-[10px] font-bold ${totalBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {totalBalance >= 0 ? <><TrendingUp className="w-3 h-3" /> Surplus Status</> : <><TrendingDown className="w-3 h-3" /> Deficit Status</>}
                 </div>
               </div>
-              <div className="mt-6 flex items-end gap-1 h-12">
+              <div className="mt-6 flex items-end gap-1 h-10 relative z-10">
                 {balance_history.map((val, i) => {
                   const max = Math.max(...balance_history, 1);
                   const h = (val / max) * 100;
-                  return <div key={i} className="flex-1 rounded-t-sm bg-gradient-to-t from-[rgba(201,168,76,0.2)] to-[rgba(201,168,76,0.6)]" style={{ height: `${Math.max(h, 5)}%` }} />;
+                  return <div key={i} className="flex-1 rounded-t-[2px] bg-gradient-to-t from-[rgba(201,168,76,0.1)] to-[rgba(201,168,76,0.5)] transition-all hover:to-[rgba(201,168,76,0.8)]" style={{ height: `${Math.max(h, 4)}%` }} />;
                 })}
               </div>
             </div>
 
-            {/* Stock Value */}
-            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] flex flex-col justify-between overflow-hidden relative">
-              <div>
-                <div className="text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-1">STOCK VALUE</div>
-                <div className="text-2xl font-black text-white mb-1">৳{(totalStockValue / 1000).toFixed(1)}K</div>
-                <div className="text-[11px] font-bold text-[#60a5fa]">{stats.products} SKUs in stock</div>
+            {/* Market Outstanding */}
+            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col justify-between overflow-hidden relative group hover:border-orange-500/20 transition-all duration-300">
+              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <ReceiptText className="w-12 h-12 text-orange-400" />
               </div>
-              <div className="mt-6 flex items-end gap-1 h-12">
-                {stock_history.map((val, i) => {
-                  const max = Math.max(...stock_history, 1);
-                  const h = (val / max) * 100;
-                  return <div key={i} className="flex-1 rounded-t-sm bg-gradient-to-t from-[rgba(59,130,246,0.2)] to-[rgba(59,130,246,0.7)]" style={{ height: `${Math.max(h, 5)}%` }} />;
-                })}
-              </div>
-            </div>
-
-            {/* Total Sales */}
-            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] flex flex-col justify-between overflow-hidden relative">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest">TOTAL SALES</span>
-                    <div className="flex gap-1">
-                      {(['day', 'week', 'month', 'year'] as Period[]).map(p => (
-                        <button key={p} onClick={() => setSalesPeriod(p)} className={`text-[9px] font-black w-4 h-4 rounded flex items-center justify-center ${salesPeriod === p ? 'bg-[#c9a84c] text-black' : 'text-[#8a95a8]'}`}>
-                          {p.charAt(0).toUpperCase()}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-white mb-1">৳{salesByPeriod[salesPeriod].toLocaleString()}</div>
-                  <div className="text-[11px] font-bold text-emerald-400">This {salesPeriod.charAt(0).toUpperCase() + salesPeriod.slice(1)}</div>
+              <div className="relative z-10">
+                <div className="text-[10px] uppercase font-black text-[#8a95a8] tracking-[0.15em] mb-1 flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-orange-500" /> Market Outstanding
+                </div>
+                <div className="text-2xl font-black text-white mb-1 tracking-tight">৳{totalDue.toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-orange-400/80 flex items-center gap-1">
+                  <Activity className="w-3 h-3" /> Receivables from Customers
                 </div>
               </div>
-              <div className="mt-6 flex items-end gap-1 h-12">
+              <div className="mt-6 flex items-end gap-1 h-10 relative z-10">
+                {due_history.map((val, i) => {
+                  const max = Math.max(...due_history, 1);
+                  // Generate SVG path for a smooth area chart
+                  const points = due_history.map((v, idx) => {
+                    const x = (idx / (due_history.length - 1)) * 100;
+                    const y = 100 - (v / max) * 100;
+                    return `${x},${y}`;
+                  }).join(' ');
+
+                  if (i === 0) return (
+                    <div key="svg-chart" className="w-full h-full">
+                      <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="dueGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="rgba(249, 115, 22, 0.4)" />
+                            <stop offset="100%" stopColor="transparent" />
+                          </linearGradient>
+                        </defs>
+                        <path d={`M 0,100 L ${points} L 100,100 Z`} fill="url(#dueGrad)" />
+                        <polyline points={points} fill="none" stroke="rgba(249, 115, 22, 0.8)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                      </svg>
+                    </div>
+                  );
+                  return null;
+                })}
+              </div>
+            </div>
+
+            {/* Cash Inflow */}
+            <Link href="/cashbook?tab=inflow" className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col justify-between overflow-hidden relative group hover:border-emerald-500/20 transition-all duration-300 block">
+              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Banknote className="w-12 h-12 text-emerald-400" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex justify-between items-center mb-1">
+                  <div className="text-[10px] uppercase font-black text-[#8a95a8] tracking-[0.15em] flex items-center gap-2">
+                    <div className="w-1 h-1 rounded-full bg-emerald-500" /> Cash Inflow
+                  </div>
+                  <div className="flex gap-1 bg-[#0b0f1a] p-0.5 rounded-md border border-white/5">
+                    {(['day', 'week', 'month', 'year'] as Period[]).map(p => (
+                      <button key={p} onClick={(e) => { e.preventDefault(); setSalesPeriod(p); }} className={`text-[8px] font-black w-3.5 h-3.5 rounded flex items-center justify-center transition-all ${salesPeriod === p ? 'bg-emerald-500 text-black shadow-lg' : 'text-[#4a5568] hover:text-[#8a95a8]'}`}>
+                        {p.charAt(0).toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-white mb-1 tracking-tight">৳{salesByPeriod[salesPeriod].toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-emerald-400/80">Received {periodLabel[salesPeriod]}</div>
+              </div>
+              <div className="mt-6 flex items-end gap-1.5 h-10 relative z-10">
                 {sales_history.map((val, i) => {
                   const max = Math.max(...sales_history, 1);
-                  const h = (val / max) * 100;
-                  return <div key={i} className="flex-1 rounded-t-sm bg-[#34d399]" style={{ height: `${Math.max(h, 5)}%` }} />;
-                })}
-              </div>
-            </div>
-
-            {/* Expenses */}
-            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] flex flex-col justify-between overflow-hidden relative">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest">EXPENSES</span>
-                    <div className="flex gap-1">
-                      {(['day', 'week', 'month', 'year'] as Period[]).map(p => (
-                        <button key={p} onClick={() => setExpensePeriod(p)} className={`text-[9px] font-black w-4 h-4 rounded flex items-center justify-center ${expensePeriod === p ? 'bg-[#c9a84c] text-black' : 'text-[#8a95a8]'}`}>
-                          {p.charAt(0).toUpperCase()}
-                        </button>
+                  const h = Math.max((val / max) * 100, 10);
+                  return (
+                    <div key={i} className="flex-1 flex flex-col gap-0.5 justify-end h-full">
+                      {Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="w-full rounded-[1px] transition-all duration-300" style={{ height: `${h / 3}%`, backgroundColor: h > 20 ? `rgba(16, 185, 129, ${0.2 + (idx * 0.3)})` : 'rgba(16, 185, 129, 0.1)' }} />
                       ))}
                     </div>
+                  );
+                })}
+              </div>
+            </Link>
+
+            {/* Cash Outflow */}
+            <Link href="/cashbook?tab=outflow" className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col justify-between overflow-hidden relative group hover:border-red-500/20 transition-all duration-300 block">
+              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <TrendingDown className="w-12 h-12 text-red-400" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex justify-between items-center mb-1">
+                  <div className="text-[10px] uppercase font-black text-[#8a95a8] tracking-[0.15em] flex items-center gap-2">
+                    <div className="w-1 h-1 rounded-full bg-red-500" /> Cash Outflow
                   </div>
-                  <div className="text-2xl font-black text-white mb-1">৳{expensesByPeriod[expensePeriod].toLocaleString()}</div>
-                  <div className="text-[11px] font-bold text-emerald-400">Net: {profit >= 0 ? '+' : ''}{profit.toLocaleString()}</div>
+                  <div className="flex gap-1 bg-[#0b0f1a] p-0.5 rounded-md border border-white/5">
+                    {(['day', 'week', 'month', 'year'] as Period[]).map(p => (
+                      <button key={p} onClick={(e) => { e.preventDefault(); setExpensePeriod(p); }} className={`text-[8px] font-black w-3.5 h-3.5 rounded flex items-center justify-center transition-all ${expensePeriod === p ? 'bg-red-500 text-white shadow-lg' : 'text-[#4a5568] hover:text-[#8a95a8]'}`}>
+                        {p.charAt(0).toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-white mb-1 tracking-tight">৳{expensesByPeriod[expensePeriod].toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-red-400/80 flex items-center gap-1">
+                  {profit >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  Surplus: {profit.toLocaleString()}
                 </div>
               </div>
-              <div className="mt-6 flex items-end gap-1 h-12">
+              <div className="mt-6 flex items-end gap-1 h-10 relative z-10">
                 {expenses_history.map((val, i) => {
                   const max = Math.max(...expenses_history, 1);
                   const h = (val / max) * 100;
-                  return <div key={i} className="flex-1 rounded-t-sm bg-[#f59e0b]" style={{ height: `${Math.max(h, 5)}%` }} />;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group/bar">
+                      <div className="w-[2px] h-full bg-white/5 absolute bottom-0" />
+                      <div className="w-full rounded-full bg-red-500/60 shadow-[0_0_8px_rgba(239,68,68,0.4)]" style={{ height: `${Math.max(h, 6)}%` }} />
+                    </div>
+                  );
                 })}
               </div>
-            </div>
+            </Link>
 
-            {/* Attendance */}
-            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center relative overflow-hidden">
-              <div className="text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-4 absolute top-5 left-5">ATTENDANCE</div>
-              <div className="relative w-20 h-20 flex items-center justify-center rounded-full mt-4" style={{ background: `conic-gradient(#a855f7 ${pct}%, rgba(255,255,255,0.05) 0)`, boxShadow: '0 0 20px rgba(168,85,247,0.4)' }}>
-                <div className="w-16 h-16 bg-[#131929] rounded-full flex items-center justify-center z-10 font-black text-white text-lg">
+            {/* Daily Attendance */}
+            <div className="bg-[#131929] rounded-2xl p-5 border border-[rgba(255,255,255,0.04)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col items-center justify-center relative overflow-hidden group hover:border-purple-500/20 transition-all duration-300">
+              <div className="text-[10px] uppercase font-black text-[#8a95a8] tracking-[0.15em] absolute top-5 left-5 flex items-center gap-2">
+                <div className="w-1 h-1 rounded-full bg-purple-500" /> Attendance
+              </div>
+              <div className="relative w-16 h-16 flex items-center justify-center rounded-full mt-4" style={{ background: `conic-gradient(#a855f7 ${pct}%, rgba(255,255,255,0.03) 0)`, boxShadow: '0 0 30px rgba(168,85,247,0.15)' }}>
+                <div className="w-13 h-13 bg-[#131929] rounded-full flex items-center justify-center z-10 font-black text-white text-base">
                   {pct}%
                 </div>
               </div>
-              <div className="text-[11px] font-bold text-[#8a95a8] mt-3">{attendance.present}/{attendance.total} Present</div>
+              <div className="text-[10px] font-bold text-[#8a95a8] mt-3">{attendance.present}/{attendance.total} Staff Present</div>
             </div>
           </div>
 
