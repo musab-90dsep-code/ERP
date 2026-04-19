@@ -130,6 +130,31 @@ function StockContent() {
     }
   };
 
+  const handleDownloadCSV = () => {
+    if (filteredProducts.length === 0) return;
+    const headers = ['Product Name', 'SKU', 'Barcode', 'Price', 'Stock', 'Unit'];
+    const rows = filteredProducts.map(p => [
+      p.name,
+      p.sku || '',
+      p.barcode || '',
+      p.price,
+      p.stock_quantity,
+      p.unit
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n"
+      + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Stock_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePrint = () => { window.print(); };
+
   const fetchGlobalStockHistory = async () => {
     setShowGlobalHistory(true);
     setHistoryLoading(true);
@@ -283,8 +308,18 @@ function StockContent() {
 
   return (
     <div className="pb-10 max-w-[1400px] mx-auto">
+      <style jsx global>{`
+        @media print {
+          nav, aside, button, .no-print, .actions-column { display: none !important; }
+          body { background: white !important; color: black !important; padding: 0 !important; }
+          .main-content { width: 100% !important; max-width: none !important; padding: 0 !important; }
+          table { border-collapse: collapse !important; width: 100% !important; }
+          th, td { border: 1px solid #ddd !important; color: black !important; background: white !important; padding: 8px !important; }
+          .low-stock-badge { color: red !important; font-weight: bold !important; }
+        }
+      `}</style>
       {/* ── Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 bg-[#131929] p-6 rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 bg-[#131929] p-6 rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] no-print">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className="w-2 h-2 rounded-full bg-[#c9a84c]" />
@@ -310,6 +345,15 @@ function StockContent() {
             <History className="w-4 h-4 text-blue-400" /> Stock History
           </button>
 
+          <div className="flex items-center gap-2">
+            <button onClick={handleDownloadCSV} title="Download CSV" className="p-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-[#c9a84c] transition-colors">
+              <Download className="w-4 h-4" />
+            </button>
+            <button onClick={handlePrint} title="Print Report" className="p-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-[#c9a84c] transition-colors">
+              <Printer className="w-4 h-4" />
+            </button>
+          </div>
+
           <button onClick={() => { if (!showForm) resetEmpForm(); setShowForm(!showForm); }} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] text-sm font-extrabold shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition hover:opacity-90">
             <Plus className="w-4 h-4" /> Add Product
           </button>
@@ -317,7 +361,7 @@ function StockContent() {
       </div>
 
       {/* ── Search and Filter Bar ── */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row gap-4 mb-8 no-print">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8a95a8]" />
           <input type="text" placeholder="Search products by name, SKU, or barcode..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#131929] border border-[rgba(255,255,255,0.04)] rounded-xl py-3 pl-12 pr-4 text-sm text-[#e8eaf0] focus:border-[#c9a84c] focus:ring-1 focus:ring-[rgba(201,168,76,0.3)] outline-none transition-colors shadow-sm" />
@@ -524,7 +568,7 @@ function StockContent() {
                   {visibleColumns.barcode && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Barcode</th>}
                   {visibleColumns.price && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Price</th>}
                   {visibleColumns.stock && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Stock</th>}
-                  {visibleColumns.actions && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider text-right">Actions</th>}
+                  {visibleColumns.actions && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider text-right no-print">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
@@ -575,7 +619,7 @@ function StockContent() {
                       </td>
                     )}
                     {visibleColumns.actions && (
-                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-6 py-4 text-right no-print" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           {product.is_tracked && (
                             <button onClick={() => { setAddStockModal({ product }); setAddStockQty(''); setAddStockNote(''); }} title="Add Stock" className="p-2 text-[#8a95a8] hover:text-emerald-400 hover:bg-[rgba(52,211,153,0.1)] rounded-lg transition-colors">

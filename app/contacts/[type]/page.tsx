@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
-import { Plus, Trash2, Pencil, Image as ImageIcon, MapPin, Mail, Building2, UserCircle2, X, Phone, MessageSquare, CreditCard, Eye, Users, LayoutGrid, List, Activity, Receipt, Banknote, PhoneCall, Send, Video, Settings } from 'lucide-react';
+import { Plus, Trash2, Pencil, Image as ImageIcon, MapPin, Mail, Building2, UserCircle2, X, Phone, MessageSquare, CreditCard, Eye, Users, LayoutGrid, List, Activity, Receipt, Banknote, PhoneCall, Send, Video, Settings, DownloadCloud } from 'lucide-react';
 
 interface Personnel {
   id?: string;
@@ -257,6 +257,67 @@ export default function ContactsTypePage() {
     } catch (error: any) { alert(error.message); }
   };
 
+  const handleDownloadAll = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const tableRows = contacts.map((c, i) => {
+      const phones = c.phone_numbers?.map((p: any) => p.number).join(', ') || c.phone || 'N/A';
+      return `
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 10px; font-size: 12px;">${i + 1}</td>
+          <td style="padding: 10px; font-size: 12px; font-weight: bold;">${c.name}</td>
+          <td style="padding: 10px; font-size: 12px;">${c.shop_name || 'N/A'}</td>
+          <td style="padding: 10px; font-size: 12px;">${phones}</td>
+          <td style="padding: 10px; font-size: 11px;">${c.address || 'N/A'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${displayTitle} List - LedgerGhor</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #f8f9fa; text-align: left; padding: 12px 10px; font-size: 12px; border-bottom: 2px solid #ddd; text-transform: uppercase; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+            .footer { margin-top: 50px; text-align: right; font-size: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 style="margin:0;">LedgerGhor ERP</h1>
+            <h2 style="margin:5px 0; color: #555;">${displayTitle} Contact List</h2>
+            <p style="font-size: 11px; color: #888;">Report Generated on: ${new Date().toLocaleString()}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>SL</th>
+                <th>Name</th>
+                <th>Shop Name</th>
+                <th>Phone Number</th>
+                <th>Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+          <div class="footer">
+            Printed from LedgerGhor ERP System
+          </div>
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
@@ -290,6 +351,98 @@ export default function ContactsTypePage() {
       newPers[index]._preview = URL.createObjectURL(file);
       setPersonnel(newPers);
     }
+  };
+
+  const handleDownloadIndividualLedger = () => {
+    if (!viewingContact) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const allItems = [
+      ...transactions.invoices.map(inv => ({ ...inv, _itemType: 'invoice', sortDate: new Date(inv.date).getTime() })),
+      ...transactions.payments.map(pay => ({ ...pay, _itemType: 'payment', sortDate: new Date(pay.date).getTime() })),
+      ...transactions.processingOrders.map(po => ({ ...po, _itemType: 'processing', sortDate: new Date(po.date).getTime() }))
+    ].sort((a, b) => b.sortDate - a.sortDate);
+
+    const totalInvoiced = transactions.invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+    const totalPaid = transactions.payments.reduce((sum, pay) => sum + (Number(pay.amount) || 0), 0);
+    const balance = totalInvoiced - totalPaid;
+
+    const tableRows = allItems.map((item, idx) => {
+      const type = item._itemType === 'invoice' ? (item.type === 'return' ? 'Return' : 'Invoice') : item._itemType === 'payment' ? 'Payment' : 'Processing';
+      const amount = item._itemType === 'payment' ? (Number(item.amount) || 0) : (Number(item.total || item.total_cost) || 0);
+      const debit = (item._itemType === 'invoice' && item.type !== 'return') || (item._itemType === 'processing' && item.type === 'issued') ? amount : 0;
+      const credit = (item._itemType === 'payment') || (item._itemType === 'invoice' && item.type === 'return') || (item._itemType === 'processing' && item.type === 'received') ? amount : 0;
+
+      return `
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 10px; font-size: 11px;">${new Date(item.date).toLocaleDateString()}</td>
+          <td style="padding: 10px; font-size: 11px;">
+            <strong>${type}</strong><br/>
+            <small style="color: #666;">${item.id?.substring(0,8).toUpperCase() || ''} ${item.method ? `(${item.method})` : ''}</small>
+          </td>
+          <td style="padding: 10px; font-size: 11px; text-align: right;">${debit > 0 ? `৳ ${debit.toLocaleString()}` : '-'}</td>
+          <td style="padding: 10px; font-size: 11px; text-align: right;">${credit > 0 ? `৳ ${credit.toLocaleString()}` : '-'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Statement - ${viewingContact.name}</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; color: #333; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
+            .contact-info { margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #f4f4f4; text-align: left; padding: 10px; font-size: 12px; border-bottom: 2px solid #ddd; }
+            .summary { margin-top: 30px; border-top: 1px solid #eee; pt: 20px; text-align: right; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 style="margin:0;">LedgerGhor ERP</h1>
+              <p style="margin:5px 0; color: #666;">Transaction Ledger Statement</p>
+            </div>
+            <div style="text-align: right;">
+              <p style="margin:0;">Date: ${new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          <div class="contact-info">
+            <h2 style="margin:0;">${viewingContact.name}</h2>
+            <p style="margin:5px 0;">${viewingContact.shop_name || ''}</p>
+            <p style="margin:2px 0; font-size: 12px;">Phone: ${viewingContact.phone_numbers?.[0]?.number || viewingContact.phone || 'N/A'}</p>
+            <p style="margin:2px 0; font-size: 12px;">Address: ${viewingContact.address || 'N/A'}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th style="text-align: right;">Debit (Bill)</th>
+                <th style="text-align: right;">Credit (Paid)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+
+          <div class="summary">
+            <p>Total Bill: <strong>৳ ${totalInvoiced.toLocaleString()}</strong></p>
+            <p>Total Paid: <strong>৳ ${totalPaid.toLocaleString()}</strong></p>
+            <h3 style="color: ${balance > 0 ? '#e11d48' : '#059669'}">Net Balance: ৳ ${Math.abs(balance).toLocaleString()} ${balance > 0 ? '(Due)' : '(Advance)'}</h3>
+          </div>
+
+          <script>window.onload = function() { window.print(); window.close(); }</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const displayTitle = rawType.replace(/^[a-z]/, char => char.toUpperCase());
@@ -355,6 +508,10 @@ export default function ContactsTypePage() {
               <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
+          <button onClick={handleDownloadAll} className="w-full sm:w-auto bg-[#1a2235] text-[#c9a84c] border border-[rgba(201,168,76,0.3)] shadow-lg px-5 py-2.5 rounded-lg flex justify-center items-center gap-2 hover:bg-[rgba(201,168,76,0.1)] transform transition-all font-bold">
+            <DownloadCloud className="w-4 h-4" />
+            Download All
+          </button>
           <button onClick={() => { if (showForm) resetForm(); else setShowForm(true); }} className="w-full sm:w-auto bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] shadow-[0_4px_14px_rgba(201,168,76,0.35)] px-5 py-2.5 rounded-lg flex justify-center items-center gap-2 hover:opacity-90 hover:scale-[1.02] transform transition-all font-bold">
             {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             {showForm ? 'Cancel' : `Add ${singularType}`}
@@ -1104,9 +1261,18 @@ export default function ContactsTypePage() {
                     );
                   })()}
 
-                  <div className="flex items-center gap-3 mb-4 pl-2">
-                    <List className="w-4 h-4 text-[#8a95a8]" />
-                    <h4 className="text-sm font-black text-[#8a95a8] uppercase tracking-widest">Detailed Timeline</h4>
+                  <div className="flex items-center justify-between mb-4 pl-2 pr-2">
+                    <div className="flex items-center gap-3">
+                      <List className="w-4 h-4 text-[#8a95a8]" />
+                      <h4 className="text-sm font-black text-[#8a95a8] uppercase tracking-widest">Detailed Timeline</h4>
+                    </div>
+                    <button 
+                      onClick={handleDownloadIndividualLedger}
+                      className="flex items-center gap-2 px-4 py-2 bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.18)] rounded-xl text-xs font-bold hover:bg-[#c9a84c] hover:text-[#131929] transition-all shadow-lg"
+                    >
+                      <DownloadCloud className="w-4 h-4" />
+                      Download Statement
+                    </button>
                   </div>
 
                   {transactions.loading ? (

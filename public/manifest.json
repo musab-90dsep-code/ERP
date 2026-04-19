@@ -6,11 +6,18 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "minimal-ui"],
+  "display_override": [
+    "window-controls-overlay",
+    "minimal-ui"
+  ],
   "background_color": "#12101e",
   "theme_color": "#4f46e5",
   "orientation": "portrait-primary",
-  "categories": ["business", "finance", "productivity"],
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -54,21 +61,36 @@
       "short_name": "Invoice",
       "description": "Create a new sales invoice",
       "url": "/invoices?tab=sell",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Payments",
       "short_name": "Payments",
       "description": "View payment records",
       "url": "/payments?tab=in",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Employees",
       "short_name": "Employees",
       "description": "Manage employees",
       "url": "/employees/list",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "protocol_handlers": [

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { api } from '@/lib/api';
-import { Plus, Trash2, Mail, FileText, Upload, User, Eye, Pencil, X, Search, Briefcase, Phone, DollarSign, DownloadCloud, Calendar, MessageSquare, MapPin, Hash, LayoutGrid, List, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Mail, FileText, Upload, User, Eye, Pencil, X, Search, Briefcase, Phone, DollarSign, DownloadCloud, Calendar, MessageSquare, MapPin, Hash, LayoutGrid, List, CheckCircle, Clock, ChevronDown } from 'lucide-react';
 
 interface EmployeeTabProps {
   employees: any[];
@@ -23,6 +23,11 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
   // Phone Menu State for Card View
   const [activePhoneMenu, setActivePhoneMenu] = useState<string | null>(null);
 
+  // Transaction Ledger State
+  const [employeeTransactions, setEmployeeTransactions] = useState<any[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [showLedgerPopup, setShowLedgerPopup] = useState(false);
+
   // Search and Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -31,7 +36,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
     name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '',
     id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [] as string[],
     phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }],
-    daily_allowance: 0, monthly_allowance: 0,
+    daily_allowance: 0, monthly_allowance: 0, overtime_rate: 0,
     is_authorizer: false
   });
 
@@ -139,11 +144,31 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
   const resetEmpForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0, is_authorizer: false });
+    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0, overtime_rate: 0, is_authorizer: false });
     setProfilePreview(null);
     setProfileImageFile(null);
     setIdPhotoFiles([]);
     setIdPhotoPreviews([]);
+  };
+
+  // Fetch Transactions when viewing an employee
+  const fetchEmployeeLedger = async (employeeId: string) => {
+    setLoadingTransactions(true);
+    try {
+      const data = await api.getEmployeeTransactions({ employee_id: employeeId });
+      // Sort by date descending
+      const sorted = (data || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setEmployeeTransactions(sorted);
+    } catch (err) {
+      console.error("Failed to fetch ledger:", err);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
+  const handleOpenView = (emp: any) => {
+    setViewingEmployee(emp);
+    fetchEmployeeLedger(emp.id);
   };
 
   const handleEdit = (emp: any) => {
@@ -163,6 +188,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
       phone_numbers: parsePhones(emp.phone),
       daily_allowance: emp.daily_allowance || 0,
       monthly_allowance: emp.monthly_allowance || 0,
+      overtime_rate: emp.overtime_rate || 0,
       is_authorizer: emp.is_authorizer || false
     });
     setProfilePreview(emp.profile_image_url || null);
@@ -391,6 +417,13 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                         <input type="number" placeholder="0.00" value={empData.monthly_allowance || ''} onChange={e => setEmpData({ ...empData, monthly_allowance: Number(e.target.value) })} className={`${inputClass} pl-10 bg-[rgba(52,211,153,0.05)] border-[rgba(52,211,153,0.15)]`} />
                       </div>
                     </div>
+                    <div>
+                      <label className={labelClass}>Overtime Rate / Hr (৳)</label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                        <input type="number" placeholder="0.00" value={empData.overtime_rate || ''} onChange={e => setEmpData({ ...empData, overtime_rate: Number(e.target.value) })} className={`${inputClass} pl-10 bg-[rgba(249,115,22,0.05)] border-[rgba(249,115,22,0.15)]`} />
+                      </div>
+                    </div>
 
                     <div className="sm:col-span-2">
                       <label className={labelClass}>Address</label>
@@ -481,61 +514,66 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
       <div className="bg-[#131929] rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-[rgba(201,168,76,0.05)] border-b border-[rgba(201,168,76,0.15)]">
-              <tr>
-                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Employee</th>
-                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Role</th>
-                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Contact</th>
-                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Salary</th>
-                <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider text-right">Actions</th>
+            <thead>
+              <tr className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.05)]">
+                <th className="px-6 py-4 text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em]">Employee</th>
+                <th className="px-6 py-4 text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em]">Role</th>
+                <th className="px-6 py-4 text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em]">Contact</th>
+                <th className="px-6 py-4 text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em]">Salary (Base)</th>
+                <th className="px-6 py-4 text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
               {filteredEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center">
+                  <td colSpan={5} className="py-20 text-center">
                     <div className="flex flex-col items-center justify-center text-[#4a5568]">
-                      <User className="w-10 h-10 mb-3 opacity-50" />
+                      <User className="w-12 h-12 mb-4 opacity-30" />
                       <p className="text-sm font-bold text-[#8a95a8]">No employees found</p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 filteredEmployees.map(e => (
-                  <tr key={e.id} className="hover:bg-[rgba(201,168,76,0.03)] transition-colors group">
+                  <tr key={e.id} onClick={() => handleOpenView(e)} className="hover:bg-[rgba(255,255,255,0.02)] transition-colors group cursor-pointer">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-[#1a2235] border border-[rgba(255,255,255,0.05)] overflow-hidden flex-shrink-0 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-[#0b0f1a] border border-[#c9a84c]/20 overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner group-hover:border-[#c9a84c]/50 transition-colors">
                           {e.profile_image_url ? (
                             <img src={e.profile_image_url} alt={e.name} className="w-full h-full object-cover" />
                           ) : (
-                            <User className="w-5 h-5 text-[#4a5568]" />
+                            <User className="w-5 h-5 text-[#c9a84c]/50" />
                           )}
                         </div>
                         <div>
-                          <p className="font-bold text-[#e8eaf0] text-sm group-hover:text-[#c9a84c] transition-colors">{e.name}</p>
-                          <p className="text-[11px] text-[#8a95a8] flex items-center gap-1 mt-0.5"><Mail className="w-3 h-3" /> {e.email || 'No email'}</p>
+                          <p className="font-black text-[#e8eaf0] text-sm tracking-wide group-hover:text-[#c9a84c] transition-colors">{e.name}</p>
+                          <p className="text-[11px] text-[#8a95a8] flex items-center gap-1.5 mt-0.5"><Mail className="w-3 h-3 text-[#4a5568]" /> {e.email || <span className="italic">No email provided</span>}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.2)]">
-                        {e.role || 'Unassigned'}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.2)]">
+                          {e.role || 'Unassigned'}
+                        </span>
+                        {e.is_authorizer && (
+                           <span className="text-[9px] font-black text-emerald-400 flex items-center gap-1 mt-0.5" title="Authorized Signatory">
+                              <CheckCircle className="w-2.5 h-2.5" /> Auth
+                           </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1 text-sm font-medium text-[#e8eaf0]">
+                      <div className="flex flex-col gap-1.5 text-sm font-medium text-[#e8eaf0]">
                         {(() => {
                            const phones = parsePhones(e.phone);
-                           if (phones.length === 0) return <span className="text-[#4a5568] text-[11px] font-bold uppercase tracking-widest italic">Not provided</span>;
+                           if (phones.length === 0) return <span className="text-[#4a5568] text-[10px] font-bold uppercase tracking-widest italic flex items-center gap-1"><Phone className="w-3 h-3" /> N/A</span>;
                            return phones.map((pn: any, i: number) => (
                               <div key={i} className="flex items-center gap-2">
-                                <Phone className="w-3 h-3 text-[#4a5568] shrink-0" />
-                                <span>{pn.number}</span>
-                                <div className="flex gap-1">
-                                  {pn.is_whatsapp && <a href={`https://wa.me/${pn.number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] text-emerald-400 font-bold bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-colors">WA</a>}
-                                  {pn.is_imo && <a href={`tel:${pn.number}`} className="text-[9px] text-indigo-400 font-bold bg-[rgba(129,140,248,0.1)] border border-[rgba(129,140,248,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-colors">imo</a>}
-                                  {pn.is_telegram && <a href={`https://t.me/${pn.number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] text-blue-400 font-bold bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-colors">TG</a>}
+                                <span className="text-xs font-bold text-[#e8eaf0]">{pn.number}</span>
+                                <div className="flex gap-1" onClick={(event) => event.stopPropagation()}>
+                                  {pn.is_whatsapp && <a href={`https://wa.me/${pn.number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="w-4 h-4 rounded bg-[rgba(52,211,153,0.1)] text-emerald-400 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all"><MessageSquare className="w-2.5 h-2.5" /></a>}
+                                  {pn.is_telegram && <a href={`https://t.me/${pn.number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noreferrer" className="w-4 h-4 rounded bg-[rgba(96,165,250,0.1)] text-blue-400 flex items-center justify-center hover:bg-blue-500 hover:text-white transition-all"><MessageSquare className="w-2.5 h-2.5" /></a>}
                                 </div>
                               </div>
                            ));
@@ -543,19 +581,16 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-black text-white">
-                        <span className="text-[#8a95a8] font-bold mr-0.5">৳</span>{Number(e.salary || 0).toLocaleString()} <span className="text-[10px] uppercase font-bold text-[#4a5568] tracking-widest">/mo</span>
+                      <div className="text-sm font-black text-white flex items-baseline">
+                        <span className="text-xs text-[#8a95a8] font-bold mr-1">৳</span>{Number(e.salary || 0).toLocaleString()}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-1 items-center justify-end">
-                        <button onClick={() => setViewingEmployee(e)} className="p-2 text-[#8a95a8] hover:text-white hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors" title="View Details">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleEdit(e)} className="p-2 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors" title="Edit">
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex gap-1.5 items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors border border-transparent hover:border-[#c9a84c]/20" title="Edit">
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button onClick={() => { if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-2 text-[#8a95a8] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete">
+                        <button onClick={(event) => { event.stopPropagation(); if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-2 text-[#8a95a8] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors border border-transparent hover:border-red-400/20" title="Delete">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -568,84 +603,87 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
         </div>
       </div>
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
          {filteredEmployees.map(e => (
-            <div key={e.id} className="bg-[#131929] border border-[rgba(255,255,255,0.04)] hover:border-[rgba(201,168,76,0.3)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] rounded-2xl p-6 flex flex-col group transition-all duration-300 relative overflow-visible">
-               <div className="flex justify-between items-start mb-4 relative z-10">
-                  <div className="w-16 h-16 rounded-2xl bg-[#1a2235] border border-[rgba(255,255,255,0.05)] flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
-                     {e.profile_image_url ? (
-                        <img src={e.profile_image_url} alt={e.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                     ) : (
-                        <User className="w-8 h-8 text-[#4a5568]" />
-                     )}
-                  </div>
+            <div key={e.id} onClick={() => handleOpenView(e)} className="bg-[#131929] border border-[rgba(255,255,255,0.04)] hover:border-[#c9a84c]/30 shadow-lg hover:shadow-[0_8px_30px_rgba(201,168,76,0.15)] rounded-2xl overflow-hidden flex flex-col group transition-all duration-300 cursor-pointer relative">
+               
+               {/* Card Header Background */}
+               <div className="h-16 bg-[#1a2235] relative border-b border-[rgba(255,255,255,0.02)]">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c9a84c]/5 to-transparent opacity-50"></div>
                   
-                  {/* Card Actions */}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-[-10px] group-hover:translate-y-0">
-                     <button onClick={() => setViewingEmployee(e)} className="p-1.5 text-[#8a95a8] hover:text-white bg-[#1a2235] rounded-md transition-colors border border-[rgba(255,255,255,0.05)]" title="View Profile">
-                       <Eye className="w-4 h-4" />
+                  {/* Actions */}
+                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1.5 text-[#8a95a8] hover:text-[#c9a84c] bg-[#131929] rounded transition-colors border border-[rgba(255,255,255,0.05)] shadow-sm" title="Edit">
+                       <Pencil className="w-3.5 h-3.5" />
                      </button>
-                     <button onClick={() => handleEdit(e)} className="p-1.5 text-[#8a95a8] hover:text-[#c9a84c] bg-[#1a2235] rounded-md transition-colors border border-[rgba(255,255,255,0.05)]" title="Edit">
-                       <Pencil className="w-4 h-4" />
-                     </button>
-                     <button onClick={() => { if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-1.5 text-[#8a95a8] hover:text-red-400 bg-[#1a2235] rounded-md transition-colors border border-[rgba(255,255,255,0.05)]" title="Delete">
-                       <Trash2 className="w-4 h-4" />
+                     <button onClick={(event) => { event.stopPropagation(); if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-1.5 text-[#8a95a8] hover:text-red-400 bg-[#131929] rounded transition-colors border border-[rgba(255,255,255,0.05)] shadow-sm" title="Delete">
+                       <Trash2 className="w-3.5 h-3.5" />
                      </button>
                   </div>
                </div>
-               
-               <div className="mb-4 relative z-10">
-                  <h3 className="font-black text-white text-lg leading-tight line-clamp-1 group-hover:text-[#c9a84c] transition-colors">{e.name}</h3>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="inline-flex items-center text-[10px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded uppercase tracking-widest">
+
+               {/* Profile Image & Name */}
+               <div className="px-6 flex flex-col items-center -mt-8 relative z-10 pb-4 border-b border-[rgba(255,255,255,0.02)]">
+                  <div className="w-16 h-16 rounded-2xl bg-[#0b0f1a] border-4 border-[#131929] shadow-md flex items-center justify-center overflow-hidden mb-3 group-hover:border-[#c9a84c]/20 transition-colors">
+                     {e.profile_image_url ? (
+                        <img src={e.profile_image_url} alt={e.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                     ) : (
+                        <User className="w-6 h-6 text-[#c9a84c]/50" />
+                     )}
+                  </div>
+                  
+                  <h3 className="font-black text-[#e8eaf0] text-lg tracking-wide text-center leading-tight mb-1.5 group-hover:text-[#c9a84c] transition-colors line-clamp-1">{e.name}</h3>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center text-[9px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded uppercase tracking-widest">
                        {e.role || 'Unassigned'}
                     </span>
                     {e.is_authorizer && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-2 py-0.5 rounded uppercase tracking-widest" title="Authorized Signatory">
-                        <CheckCircle className="w-3 h-3" /> Auth
-                      </span>
+                       <span className="inline-flex items-center text-[9px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-2 py-0.5 rounded uppercase tracking-widest" title="Authorized Signatory">
+                          Auth
+                       </span>
                     )}
                   </div>
                </div>
                
-               <div className="flex-1 space-y-3 mb-5 border-t border-[rgba(255,255,255,0.04)] pt-4 relative z-10">
-                  {/* UPDATED CARD PHONE SECTION WITH INTERACTIVE MENU */}
+               {/* Contact Info */}
+               <div className="p-4 flex-1 space-y-3 bg-[#131929]">
+                  <div className="flex items-center gap-2.5 text-xs">
+                     <div className="w-6 h-6 rounded bg-[#1a2235] flex items-center justify-center border border-[rgba(255,255,255,0.02)] shrink-0">
+                       <Mail className="w-3 h-3 text-[#8a95a8]" />
+                     </div>
+                     <span className="text-[#e8eaf0] font-medium truncate">{e.email || <span className="text-[#4a5568] italic text-[10px] uppercase font-bold tracking-widest">No email</span>}</span>
+                  </div>
+
                   {(() => {
                      const phones = parsePhones(e.phone);
                      if (phones.length > 0) {
                         return (
-                           <div className="flex items-center justify-between bg-[#1a2235] rounded-lg p-2 border border-[rgba(255,255,255,0.02)] relative overflow-visible">
-                             <span className="text-[#e8eaf0] font-bold text-sm tracking-wide break-all mr-2">{phones[0].number}</span>
+                           <div className="flex items-center justify-between text-xs group/phone">
+                             <div className="flex items-center gap-2.5 truncate">
+                               <div className="w-6 h-6 rounded bg-[#1a2235] flex items-center justify-center border border-[rgba(255,255,255,0.02)] shrink-0">
+                                 <Phone className="w-3 h-3 text-[#8a95a8]" />
+                               </div>
+                               <span className="text-[#e8eaf0] font-bold">{phones[0].number}</span>
+                             </div>
                              
-                             <div className="relative">
+                             <div className="relative" onClick={(event) => event.stopPropagation()}>
                                <button 
                                  onClick={() => setActivePhoneMenu(activePhoneMenu === e.id ? null : e.id)}
-                                 className={`flex items-center justify-center w-8 h-8 rounded shrink-0 transition-colors ${activePhoneMenu === e.id ? 'bg-blue-500 text-white' : 'bg-[rgba(96,165,250,0.1)] text-blue-400 hover:bg-blue-500 hover:text-white'}`}
+                                 className="w-6 h-6 rounded flex items-center justify-center text-[#8a95a8] hover:text-white hover:bg-[#1a2235] transition-colors"
                                >
-                                 <Phone className="w-4 h-4" />
+                                 <ChevronDown className={`w-3 h-3 transition-transform ${activePhoneMenu === e.id ? 'rotate-180' : ''}`} />
                                </button>
 
-                               {/* Interactive Phone Dropdown */}
                                {activePhoneMenu === e.id && (
                                  <>
                                    <div className="fixed inset-0 z-10" onClick={() => setActivePhoneMenu(null)}></div>
-                                   <div className="absolute right-0 bottom-full mb-2 w-max bg-[#131929] border border-[rgba(255,255,255,0.05)] rounded-lg shadow-[0_4px_24px_rgba(0,0,0,0.6)] z-20 flex flex-col p-1.5 animate-slide-up">
-                                     <a href={`tel:${phones[0].number}`} className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[#e8eaf0] hover:bg-[rgba(255,255,255,0.05)] rounded transition-colors">
-                                        <Phone className="w-3.5 h-3.5 text-[#8a95a8]" /> Direct Call
+                                   <div className="absolute right-0 bottom-full mb-1 w-max bg-[#1a2235] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-xl z-20 flex flex-col p-1 animate-fade-in">
+                                     <a href={`tel:${phones[0].number}`} className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#e8eaf0] hover:bg-[rgba(255,255,255,0.05)] rounded transition-colors">
+                                        Call
                                      </a>
                                      {phones[0].is_whatsapp && (
-                                        <a href={`https://wa.me/${phones[0].number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-[rgba(52,211,153,0.1)] rounded transition-colors">
-                                           <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
-                                        </a>
-                                     )}
-                                     {phones[0].is_telegram && (
-                                        <a href={`https://t.me/${phones[0].number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-blue-400 hover:bg-[rgba(96,165,250,0.1)] rounded transition-colors">
-                                           <MessageSquare className="w-3.5 h-3.5" /> Telegram
-                                        </a>
-                                     )}
-                                     {phones[0].is_imo && (
-                                        <a href={`tel:${phones[0].number}`} className="flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-indigo-400 hover:bg-[rgba(129,140,248,0.1)] rounded transition-colors">
-                                           <Phone className="w-3.5 h-3.5" /> imo (Dial)
+                                        <a href={`https://wa.me/${phones[0].number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400 hover:bg-[rgba(52,211,153,0.1)] rounded transition-colors">
+                                           WhatsApp
                                         </a>
                                      )}
                                    </div>
@@ -655,17 +693,21 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                            </div>
                         )
                      }
-                     return <div className="text-[#4a5568] text-[10px] uppercase font-bold tracking-widest p-2">No phone number</div>
+                     return (
+                       <div className="flex items-center gap-2.5 text-xs">
+                         <div className="w-6 h-6 rounded bg-[#1a2235] flex items-center justify-center border border-[rgba(255,255,255,0.02)] shrink-0">
+                           <Phone className="w-3 h-3 text-[#4a5568]" />
+                         </div>
+                         <span className="text-[#4a5568] italic text-[10px] uppercase font-bold tracking-widest">No phone</span>
+                       </div>
+                     )
                   })()}
-                  
-                  <span className="flex items-center gap-2.5 text-xs text-[#8a95a8] font-bold px-1 truncate"><Mail className="w-3.5 h-3.5 text-[#4a5568] shrink-0" /> {e.email || 'No email'}</span>
                </div>
 
-               <div className="pt-4 border-t border-[rgba(255,255,255,0.04)] flex items-center justify-between relative z-10">
-                  <div>
-                     <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest mb-0.5">Base Salary</p>
-                     <p className="font-black text-white text-lg"><span className="mr-0.5 text-sm text-[#8a95a8]">৳</span>{Number(e.salary || 0).toLocaleString()} <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a5568]">/mo</span></p>
-                  </div>
+               {/* Footer / Salary */}
+               <div className="p-4 bg-[#1a2235]/40 border-t border-[rgba(255,255,255,0.02)] flex items-center justify-between">
+                  <p className="text-[9px] font-black text-[#8a95a8] uppercase tracking-[0.2em]">Base Salary</p>
+                  <p className="font-black text-white"><span className="text-xs text-[#8a95a8] mr-0.5">৳</span>{Number(e.salary || 0).toLocaleString()}</p>
                </div>
             </div>
          ))}
@@ -679,143 +721,364 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
       </div>
       )}
 
-      {/* ── VIEW PROFILE MODAL ── */}
+      {/* ── VIEW PROFILE MODAL (PREMIUM REDESIGN) ── */}
       {viewingEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0f1a]/80 backdrop-blur-sm p-4 w-full animate-fade-in">
-          <div className="bg-[#131929] border border-[rgba(201,168,76,0.2)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#050810]/90 backdrop-blur-md p-4 w-full animate-fade-in" onClick={() => setViewingEmployee(null)}>
+          <div className="bg-gradient-to-b from-[#131929] to-[#0b0f1a] border border-[rgba(201,168,76,0.3)] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] relative" onClick={(e) => e.stopPropagation()}>
             
-            {/* Header Background */}
-            <div className="h-24 bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] relative shrink-0">
-               <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at center, #c9a84c 0%, transparent 70%)' }}></div>
-              <button onClick={() => setViewingEmployee(null)} className="absolute top-4 right-4 text-[#8a95a8] hover:text-white bg-[#131929]/50 hover:bg-[#131929] p-1.5 rounded-lg transition-colors border border-[rgba(255,255,255,0.05)] z-10"><X className="w-5 h-5" /></button>
-            </div>
-            
-            {/* Fixed Profile Image & Name */}
-            <div className="flex flex-col items-center -mt-12 mb-4 relative z-10 shrink-0">
-              <div className="w-24 h-24 rounded-2xl bg-[#0b0f1a] flex items-center justify-center overflow-hidden border-4 border-[#131929] shadow-lg">
-                {viewingEmployee.profile_image_url ? (
-                  <img src={viewingEmployee.profile_image_url} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <User className="w-10 h-10 text-[#4a5568]" />
-                )}
-              </div>
-              <h3 className="text-2xl font-black text-white mt-3 text-center">{viewingEmployee.name}</h3>
-              <div className="flex gap-2 mt-2">
-                <span className="text-[10px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-3 py-1 rounded uppercase tracking-widest">{viewingEmployee.role || 'Unassigned'}</span>
-                {viewingEmployee.is_authorizer && (
-                   <span className="text-[10px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-3 py-1 rounded uppercase tracking-widest flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" /> Authorizer
-                   </span>
-                )}
-              </div>
-            </div>
-            
-            {/* Scrollable Details Section */}
-            <div className="px-6 pb-6 relative overflow-y-auto custom-scrollbar flex-1">
-              <div className="space-y-4 bg-[#1a2235] p-5 rounded-xl border border-[rgba(255,255,255,0.04)]">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
-                    <Calendar className="w-4 h-4 text-[#c9a84c]" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Date of Birth</p>
-                    <p className="font-bold text-[#e8eaf0] truncate">{viewingEmployee.dob || 'Not provided'}</p>
-                  </div>
-                </div>
+            {/* Top Close Button */}
+            <button onClick={() => setViewingEmployee(null)} className="absolute top-4 right-4 text-[#8a95a8] hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors z-20">
+              <X className="w-5 h-5" />
+            </button>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Email Address</p>
-                    <p className="font-bold text-[#e8eaf0] truncate">{viewingEmployee.email || 'N/A'}</p>
-                  </div>
+            {/* Premium Header / Cover */}
+            <div className="relative pt-12 pb-8 px-8 flex flex-col items-center border-b border-[rgba(255,255,255,0.05)] overflow-hidden shrink-0">
+               {/* Background Glow */}
+               <div className="absolute inset-0 bg-gradient-to-br from-[#c9a84c]/10 via-transparent to-transparent opacity-50 blur-2xl"></div>
+               <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-[80px] -z-10"></div>
+               
+               <div className="relative z-10 w-32 h-32 rounded-full bg-[#0b0f1a] flex items-center justify-center overflow-hidden border-[3px] border-[#c9a84c]/50 shadow-[0_0_30px_rgba(201,168,76,0.2)] mb-5">
+                 {viewingEmployee.profile_image_url ? (
+                   <img src={viewingEmployee.profile_image_url} alt="Profile" className="w-full h-full object-cover" />
+                 ) : (
+                   <User className="w-14 h-14 text-[#c9a84c]/50" />
+                 )}
+               </div>
+               
+               <h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-[#e8eaf0] tracking-tight text-center leading-none mb-3">
+                 {viewingEmployee.name}
+               </h3>
+               
+               <div className="flex flex-wrap justify-center gap-2">
+                 <span className="text-xs font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.25)] px-4 py-1.5 rounded-full uppercase tracking-widest shadow-inner">
+                   {viewingEmployee.role || 'Unassigned'}
+                 </span>
+                 {viewingEmployee.is_authorizer && (
+                    <span className="text-xs font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)] px-4 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-inner">
+                       <CheckCircle className="w-3.5 h-3.5" /> Authorized Signatory
+                    </span>
+                 )}
+               </div>
+            </div>
+            
+            {/* Scrollable Content Body */}
+            <div className="px-8 py-6 relative overflow-y-auto custom-scrollbar flex-1 space-y-6">
+              
+              {/* Financial Summary Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-[#1a2235]/60 border border-[rgba(255,255,255,0.04)] rounded-2xl p-4 flex flex-col justify-center text-center">
+                   <p className="text-[9px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-1">Base Salary</p>
+                   <p className="text-xl font-black text-white"><span className="text-xs text-[#8a95a8] mr-0.5">৳</span>{Number(viewingEmployee.salary || 0).toLocaleString()}</p>
                 </div>
+                <div className="bg-[#1a2235]/60 border border-[rgba(255,255,255,0.04)] rounded-2xl p-4 flex flex-col justify-center text-center">
+                   <p className="text-[9px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-1">Daily Allowance</p>
+                   <p className="text-xl font-black text-white"><span className="text-xs text-[#8a95a8] mr-0.5">৳</span>{Number(viewingEmployee.daily_allowance || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-[#1a2235]/60 border border-[rgba(255,255,255,0.04)] rounded-2xl p-4 flex flex-col justify-center text-center">
+                   <p className="text-[9px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-1">Mo. Allowance</p>
+                   <p className="text-xl font-black text-white"><span className="text-xs text-[#8a95a8] mr-0.5">৳</span>{Number(viewingEmployee.monthly_allowance || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-[#1a2235]/60 border border-[rgba(255,255,255,0.04)] rounded-2xl p-4 flex flex-col justify-center text-center">
+                   <p className="text-[9px] font-black text-orange-400/80 uppercase tracking-[0.2em] mb-1">OT Rate / hr</p>
+                   <p className="text-xl font-black text-orange-400"><span className="text-xs text-orange-400/50 mr-0.5">৳</span>{Number(viewingEmployee.overtime_rate || 0).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Personal & Contact Info */}
+              <div className="bg-[#1a2235]/40 border border-[rgba(255,255,255,0.04)] rounded-2xl overflow-hidden divide-y divide-[rgba(255,255,255,0.03)]">
                 
-                <div className="flex flex-col gap-2">
-                   <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest pl-1 mb-1 border-b border-[rgba(255,255,255,0.02)] pb-2">Contact Numbers</p>
-                   {parsePhones(viewingEmployee.phone).length > 0 ? (
-                     <div className="grid grid-cols-1 gap-2">
-                       {parsePhones(viewingEmployee.phone).map((pn: any, i: number) => (
-                         <div key={i} className="flex items-center justify-between gap-3 bg-[#131929] p-2.5 rounded-lg border border-[rgba(255,255,255,0.02)]">
-                           <div className="flex items-center gap-2">
-                             <Phone className="w-3.5 h-3.5 text-[#4a5568]" />
-                             <span className="font-bold text-sm text-[#e8eaf0]">{pn.number}</span>
-                           </div>
-                           <div className="flex gap-1.5">
-                             {pn.is_whatsapp && <a href={`https://wa.me/${pn.number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] font-black text-emerald-400 bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] px-1.5 py-0.5 rounded uppercase hover:bg-emerald-500 hover:text-white transition-colors">WA</a>}
-                             {pn.is_imo && <a href={`tel:${pn.number}`} className="text-[9px] font-black text-indigo-400 bg-[rgba(129,140,248,0.1)] border border-[rgba(129,140,248,0.2)] px-1.5 py-0.5 rounded uppercase hover:bg-indigo-500 hover:text-white transition-colors">imo</a>}
-                             {pn.is_telegram && <a href={`https://t.me/${pn.number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noreferrer" className="text-[9px] font-black text-blue-400 bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] px-1.5 py-0.5 rounded uppercase hover:bg-blue-500 hover:text-white transition-colors">TG</a>}
-                           </div>
+                {/* Contact List */}
+                {parsePhones(viewingEmployee.phone).length > 0 ? (
+                  parsePhones(viewingEmployee.phone).map((pn: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-4 hover:bg-[rgba(255,255,255,0.02)] transition-colors">
+                       <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-[#0b0f1a] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
+                            <Phone className="w-4 h-4 text-[#8a95a8]" />
                          </div>
-                       ))}
-                     </div>
-                   ) : (
-                     <span className="text-[#4a5568] text-[10px] uppercase font-bold tracking-widest italic pl-1">No contact number provided</span>
-                   )}
-                </div>
+                         <div>
+                            <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest mb-0.5">Contact Number</p>
+                            <p className="text-sm font-bold text-[#e8eaf0] tracking-wide">{pn.number}</p>
+                         </div>
+                       </div>
+                       <div className="flex gap-2">
+                         {pn.is_whatsapp && <a href={`https://wa.me/${pn.number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-[rgba(52,211,153,0.1)] text-emerald-400 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all"><MessageSquare className="w-4 h-4" /></a>}
+                         {pn.is_imo && <a href={`tel:${pn.number}`} className="w-8 h-8 rounded-full bg-[rgba(129,140,248,0.1)] text-indigo-400 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-all"><Phone className="w-4 h-4" /></a>}
+                         {pn.is_telegram && <a href={`https://t.me/${pn.number.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-[rgba(96,165,250,0.1)] text-blue-400 flex items-center justify-center hover:bg-blue-500 hover:text-white transition-all"><MessageSquare className="w-4 h-4" /></a>}
+                       </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#0b0f1a] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
+                       <Phone className="w-4 h-4 text-[#4a5568]" />
+                    </div>
+                    <p className="text-[10px] uppercase font-bold text-[#4a5568] tracking-widest italic">No contact number provided</p>
+                  </div>
+                )}
 
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-4 h-4 text-red-400" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Address</p>
-                    <p className="font-bold text-[#e8eaf0] truncate" title={viewingEmployee.address}>{viewingEmployee.address || 'N/A'}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#131929] border border-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
-                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                <div className="flex items-center gap-3 p-4">
+                  <div className="w-10 h-10 rounded-full bg-[#0b0f1a] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
+                     <Mail className="w-4 h-4 text-[#8a95a8]" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Base Salary</p>
-                    <p className="font-black text-white"><span className="text-lg font-bold mr-0.5 text-[#8a95a8]">৳</span>{Number(viewingEmployee.salary || 0).toLocaleString()} <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a5568]">/ month</span></p>
+                     <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest mb-0.5">Email Address</p>
+                     <p className="text-sm font-bold text-[#e8eaf0]">{viewingEmployee.email || <span className="italic text-[#4a5568]">Not provided</span>}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-2">
-                   {viewingEmployee.daily_allowance > 0 && (
-                      <div className="bg-[#131929] p-3 rounded-lg border border-[rgba(255,255,255,0.02)]">
-                         <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1">Daily Allowance</p>
-                         <p className="font-bold text-white text-sm">৳ {viewingEmployee.daily_allowance}</p>
-                      </div>
-                   )}
-                   {viewingEmployee.monthly_allowance > 0 && (
-                      <div className="bg-[#131929] p-3 rounded-lg border border-[rgba(255,255,255,0.02)]">
-                         <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1">Monthly Allowance</p>
-                         <p className="font-bold text-white text-sm">৳ {viewingEmployee.monthly_allowance}</p>
-                      </div>
-                   )}
+                <div className="flex items-center gap-3 p-4">
+                  <div className="w-10 h-10 rounded-full bg-[#0b0f1a] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
+                     <Calendar className="w-4 h-4 text-[#8a95a8]" />
+                  </div>
+                  <div>
+                     <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest mb-0.5">Date of Birth</p>
+                     <p className="text-sm font-bold text-[#e8eaf0]">{viewingEmployee.dob || <span className="italic text-[#4a5568]">Not provided</span>}</p>
+                  </div>
                 </div>
+
+                <div className="flex items-center gap-3 p-4">
+                  <div className="w-10 h-10 rounded-full bg-[#0b0f1a] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
+                     <MapPin className="w-4 h-4 text-[#8a95a8]" />
+                  </div>
+                  <div className="flex-1">
+                     <p className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest mb-0.5">Address</p>
+                     <p className="text-sm font-bold text-[#e8eaf0] leading-relaxed">{viewingEmployee.address || <span className="italic text-[#4a5568]">Not provided</span>}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Documents Section */}
+              <div className="bg-[#1a2235]/40 border border-[rgba(255,255,255,0.04)] rounded-2xl p-5">
+                <p className="text-[10px] font-black text-[#c9a84c] uppercase tracking-[0.2em] flex items-center gap-2 mb-4">
+                  <FileText className="w-3.5 h-3.5" /> ID Documents
+                </p>
                 
-                <div className="flex flex-col gap-2 pt-4 border-t border-[rgba(255,255,255,0.04)]">
-                  <p className="text-[10px] font-black text-[#c9a84c] uppercase tracking-widest">
-                    ID Document ({viewingEmployee.id_document_type || 'NID'} {viewingEmployee.id_document_number ? `- ${viewingEmployee.id_document_number}` : ''})
-                  </p>
+                <div className="flex flex-col gap-3">
+                  <div className="bg-[#0b0f1a] border border-[rgba(255,255,255,0.02)] p-3 rounded-xl flex items-center justify-between">
+                     <span className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Document Type</span>
+                     <span className="text-xs font-bold text-white uppercase tracking-widest">{viewingEmployee.id_document_type || 'NID'}</span>
+                  </div>
+                  {viewingEmployee.id_document_number && (
+                    <div className="bg-[#0b0f1a] border border-[rgba(255,255,255,0.02)] p-3 rounded-xl flex items-center justify-between">
+                       <span className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Document Number</span>
+                       <span className="text-xs font-bold text-[#c9a84c] tracking-widest font-mono">{viewingEmployee.id_document_number}</span>
+                    </div>
+                  )}
+                  
                   {viewingEmployee.id_photo_urls && viewingEmployee.id_photo_urls.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 custom-scrollbar overflow-x-auto pb-1">
+                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
                        {viewingEmployee.id_photo_urls.map((url: string, i: number) => (
-                         <a key={i} href={url} target="_blank" rel="noreferrer" className="w-14 h-14 rounded-lg overflow-hidden border border-[rgba(255,255,255,0.1)] hover:border-[#c9a84c] transition-colors shadow-sm block shrink-0">
-                           <img src={url} alt={`ID ${i+1}`} className="w-full h-full object-cover" />
+                         <a key={i} href={url} target="_blank" rel="noreferrer" className="aspect-video rounded-xl overflow-hidden border-2 border-[rgba(255,255,255,0.05)] hover:border-[#c9a84c] transition-colors relative group block shadow-md">
+                           <img src={url} alt={`ID ${i+1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Eye className="w-6 h-6 text-white" />
+                           </div>
                          </a>
                        ))}
                     </div>
                   ) : (
-                    <p className="text-[10px] uppercase font-bold text-[#4a5568] tracking-widest italic">No documents uploaded</p>
+                    <div className="mt-2 text-center py-6 border border-dashed border-[rgba(255,255,255,0.1)] rounded-xl">
+                      <p className="text-[10px] uppercase font-bold text-[#4a5568] tracking-widest italic">No document photos uploaded</p>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-            
-            <div className="p-4 border-t border-[rgba(255,255,255,0.04)] bg-[#1a2235] flex justify-end shrink-0">
-              <button onClick={() => setViewingEmployee(null)} className="px-6 py-2.5 bg-[#131929] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] font-bold rounded-lg shadow-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors text-sm">
-                Close
-              </button>
+
+              {/* ── TRANSACTION LEDGER SECTION ── */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-4">
+                   <h3 className="text-[10px] font-black text-[#c9a84c] uppercase tracking-[0.3em] flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5" /> Transaction Ledger
+                   </h3>
+                   <button 
+                      onClick={() => setShowLedgerPopup(true)}
+                      className="text-[9px] font-black text-[#c9a84c] bg-[#c9a84c]/10 border border-[#c9a84c]/20 px-3 py-1.5 rounded uppercase tracking-widest hover:bg-[#c9a84c] hover:text-[#0b0f1a] transition-all"
+                   >
+                      View Full Statement
+                   </button>
+                </div>
+
+                {loadingTransactions ? (
+                   <div className="py-12 flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-widest">Loading Records...</p>
+                   </div>
+                ) : employeeTransactions.length === 0 ? (
+                   <div className="py-10 text-center bg-[#131929]/50 rounded-2xl border border-dashed border-[rgba(255,255,255,0.05)]">
+                      <p className="text-[10px] font-bold text-[#4a5568] uppercase tracking-widest italic">No transactions found for this employee</p>
+                   </div>
+                ) : (
+                   <div className="space-y-3">
+                      {employeeTransactions.map((tx, idx) => (
+                         <div key={tx.id || idx} className="bg-[#131929] border border-[rgba(255,255,255,0.03)] rounded-xl p-4 hover:border-[#c9a84c]/20 transition-all group/tx">
+                            <div className="flex items-center justify-between gap-4">
+                               <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${
+                                     tx.type === 'deduction' 
+                                     ? 'bg-red-500/10 border-red-500/20 text-red-400 group-hover/tx:bg-red-500/20' 
+                                     : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover/tx:bg-emerald-500/20'
+                                  }`}>
+                                     {tx.type === 'salary' && <DollarSign className="w-5 h-5" />}
+                                     {tx.type === 'advance' && <Clock className="w-5 h-5" />}
+                                     {tx.type === 'bonus' && <Plus className="w-5 h-5" />}
+                                     {tx.type === 'deduction' && <Trash2 className="w-5 h-5" />}
+                                     {tx.type === 'allowance' && <Briefcase className="w-5 h-5" />}
+                                     {!['salary', 'advance', 'bonus', 'deduction', 'allowance'].includes(tx.type) && <FileText className="w-5 h-5" />}
+                                  </div>
+                                  <div>
+                                     <p className="text-xs font-black text-[#e8eaf0] uppercase tracking-wider group-hover/tx:text-[#c9a84c] transition-colors">{tx.type}</p>
+                                     <p className="text-[10px] font-bold text-[#8a95a8] flex items-center gap-1.5">
+                                        <Calendar className="w-3 h-3" /> {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                     </p>
+                                  </div>
+                               </div>
+                               <div className="text-right">
+                                  <p className={`text-sm font-black ${tx.type === 'deduction' ? 'text-red-400' : 'text-white'}`}>
+                                     {tx.type === 'deduction' ? '-' : '+'} ৳{Number(tx.amount).toLocaleString()}
+                                  </p>
+                                  {tx.note && <p className="text-[9px] font-medium text-[#4a5568] italic mt-0.5 line-clamp-1 max-w-[150px]" title={tx.note}>{tx.note}</p>}
+                               </div>
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                )}
+              </div>
+
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── FULL LEDGER STATEMENT POPUP (HIGH-END) ── */}
+      {showLedgerPopup && viewingEmployee && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#050810]/95 backdrop-blur-xl p-4 md:p-8 animate-fade-in">
+           <div className="bg-[#0b0f1a] border border-[#c9a84c]/30 rounded-[32px] shadow-[0_0_100px_rgba(201,168,76,0.1)] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative">
+              
+              {/* Decorative Background Elements */}
+              <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#c9a84c]/5 to-transparent pointer-events-none"></div>
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#c9a84c]/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+              {/* Header */}
+              <div className="px-8 pt-8 pb-6 border-b border-[rgba(255,255,255,0.05)] flex items-start justify-between relative z-10">
+                 <div className="flex gap-6">
+                    <div className="w-20 h-20 rounded-2xl bg-[#131929] border-2 border-[#c9a84c]/30 overflow-hidden shadow-lg flex-shrink-0">
+                       {viewingEmployee.profile_image_url ? (
+                          <img src={viewingEmployee.profile_image_url} alt="Profile" className="w-full h-full object-cover" />
+                       ) : (
+                          <div className="w-full h-full flex items-center justify-center"><User className="w-8 h-8 text-[#c9a84c]/50" /></div>
+                       )}
+                    </div>
+                    <div>
+                       <h2 className="text-2xl font-black text-white tracking-tight mb-1">{viewingEmployee.name}</h2>
+                       <p className="text-[#c9a84c] text-[10px] font-black uppercase tracking-[0.3em] mb-3">{viewingEmployee.role || 'Employee'} Statement</p>
+                       <div className="flex gap-4">
+                          <div className="flex flex-col">
+                             <span className="text-[9px] font-black text-[#4a5568] uppercase tracking-widest">Base Salary</span>
+                             <span className="text-sm font-bold text-white">৳{Number(viewingEmployee.salary || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="w-px h-8 bg-[rgba(255,255,255,0.05)]"></div>
+                          <div className="flex flex-col">
+                             <span className="text-[9px] font-black text-[#4a5568] uppercase tracking-widest">Total Transactions</span>
+                             <span className="text-sm font-bold text-white">{employeeTransactions.length} Records</span>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="flex flex-col items-end gap-3">
+                    <button 
+                       onClick={() => setShowLedgerPopup(false)}
+                       className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#8a95a8] hover:text-white transition-all border border-white/5"
+                    >
+                       <X className="w-5 h-5" />
+                    </button>
+                    <button 
+                       onClick={() => window.print()}
+                       className="flex items-center gap-2 px-4 py-2 bg-[#c9a84c] text-[#0b0f1a] rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-[0_4px_20px_rgba(201,168,76,0.3)]"
+                    >
+                       <DownloadCloud className="w-4 h-4" /> Export/Print
+                    </button>
+                 </div>
+              </div>
+
+              {/* Stats Bar */}
+              <div className="px-8 py-4 bg-[#131929]/50 border-b border-[rgba(255,255,255,0.03)] grid grid-cols-3 gap-8 relative z-10">
+                 <div>
+                    <p className="text-[9px] font-black text-[#4a5568] uppercase tracking-[0.2em] mb-1">Total Paid (Out)</p>
+                    <p className="text-lg font-black text-emerald-400">
+                       ৳{employeeTransactions.filter(t => t.type !== 'deduction').reduce((sum, t) => sum + Number(t.amount), 0).toLocaleString()}
+                    </p>
+                 </div>
+                 <div>
+                    <p className="text-[9px] font-black text-[#4a5568] uppercase tracking-[0.2em] mb-1">Total Deductions</p>
+                    <p className="text-lg font-black text-red-400">
+                       ৳{employeeTransactions.filter(t => t.type === 'deduction').reduce((sum, t) => sum + Number(t.amount), 0).toLocaleString()}
+                    </p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-[9px] font-black text-[#4a5568] uppercase tracking-[0.2em] mb-1">Net Balance</p>
+                    <p className="text-lg font-black text-[#c9a84c]">
+                       ৳{(
+                          employeeTransactions.filter(t => t.type !== 'deduction').reduce((sum, t) => sum + Number(t.amount), 0) -
+                          employeeTransactions.filter(t => t.type === 'deduction').reduce((sum, t) => sum + Number(t.amount), 0)
+                       ).toLocaleString()}
+                    </p>
+                 </div>
+              </div>
+
+              {/* Transactions Table */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-8 relative z-10">
+                 <table className="w-full text-left border-collapse">
+                    <thead>
+                       <tr className="border-b border-[rgba(255,255,255,0.05)]">
+                          <th className="pb-4 text-[10px] font-black text-[#4a5568] uppercase tracking-widest">Date</th>
+                          <th className="pb-4 text-[10px] font-black text-[#4a5568] uppercase tracking-widest">Type</th>
+                          <th className="pb-4 text-[10px] font-black text-[#4a5568] uppercase tracking-widest">Description/Note</th>
+                          <th className="pb-4 text-[10px] font-black text-[#4a5568] uppercase tracking-widest text-right">Amount</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
+                       {employeeTransactions.length === 0 ? (
+                          <tr>
+                             <td colSpan={4} className="py-20 text-center">
+                                <p className="text-xs font-bold text-[#4a5568] uppercase tracking-widest italic">No transaction history available</p>
+                             </td>
+                          </tr>
+                       ) : (
+                          employeeTransactions.map((tx, idx) => (
+                             <tr key={tx.id || idx} className="hover:bg-white/[0.02] transition-colors group">
+                                <td className="py-4 text-xs font-bold text-[#8a95a8] group-hover:text-white transition-colors">
+                                   {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                </td>
+                                <td className="py-4">
+                                   <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${
+                                      tx.type === 'deduction' 
+                                      ? 'bg-red-500/10 text-red-400 border-red-500/20' 
+                                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                   }`}>
+                                      {tx.type}
+                                   </span>
+                                </td>
+                                <td className="py-4 text-xs font-medium text-[#e8eaf0]">
+                                   {tx.note || <span className="text-[#4a5568] italic tracking-tight opacity-50">N/A</span>}
+                                </td>
+                                <td className={`py-4 text-sm font-black text-right ${tx.type === 'deduction' ? 'text-red-400' : 'text-white'}`}>
+                                   {tx.type === 'deduction' ? '-' : '+'} ৳{Number(tx.amount).toLocaleString()}
+                                </td>
+                             </tr>
+                          ))
+                       )}
+                    </tbody>
+                 </table>
+              </div>
+
+              {/* Footer */}
+              <div className="px-8 py-4 bg-[#0b0f1a] border-t border-[rgba(255,255,255,0.05)] text-center relative z-10">
+                 <p className="text-[9px] font-black text-[#4a5568] uppercase tracking-[0.3em]">Official Ledger Statement • Generated on {new Date().toLocaleDateString()}</p>
+              </div>
+
+           </div>
         </div>
       )}
     </div>

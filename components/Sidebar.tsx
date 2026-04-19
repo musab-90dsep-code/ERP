@@ -64,7 +64,6 @@ const navItems = [
     subItems: [
       { name: 'Make a Receipt', href: '/expenses?tab=make' },
       { name: 'Pay for Receipt', href: '/expenses?tab=pay' },
-      { name: 'Add Money', href: '/expenses?tab=add_money' },
     ]
   },
   {
@@ -72,6 +71,7 @@ const navItems = [
     subItems: [
       { name: 'Received', href: '/payments?tab=in' },
       { name: 'Paid', href: '/payments?tab=out' },
+      { name: 'Add Money', href: '/payments?tab=add_money' },
     ]
   },
   {
@@ -171,14 +171,14 @@ export function Sidebar() {
       }}
     >
       {/* ── Brand & Controls ── */}
-      <div className="flex items-center justify-between p-5 border-b border-white/5">
+      <div className="flex items-center justify-between pt-5 pb-1 px-4">
         <div className={`flex items-center gap-3 ${minimized ? 'justify-center w-full' : ''}`}>
-          <div className="flex items-center justify-center flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-[#c9a84c] to-[#f0c040] shadow-[0_4px_16px_rgba(201,168,76,.4)]">
-            <LayoutDashboard className="w-[18px] h-[18px] text-[#0a0900]" />
+          <div className="flex items-center justify-center flex-shrink-0 w-16 h-14 overflow-hidden drop-shadow-lg">
+            <img src="/logo.png" alt="LedgerGhor" className="w-full h-full object-contain scale-[3.2]" />
           </div>
           {!minimized && (
             <div className="flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300">
-              <span className="font-extrabold text-[14px] text-[#f0c040] leading-tight tracking-wide">ERP Manager</span>
+              <span className="font-extrabold text-[14px] text-[#f0c040] leading-tight tracking-wide">LedgerGhor</span>
               <span className="text-[10px] font-medium text-[#c9a84c]/60 mt-0.5 uppercase tracking-wider">Business Suite</span>
             </div>
           )}
@@ -186,7 +186,7 @@ export function Sidebar() {
 
         {/* Toggle Button - Desktop Only */}
         {!isMobile && (
-          <button 
+          <button
             onClick={() => setIsMinimized(!isMinimized)}
             className={`absolute right-[-14px] top-6 bg-[#1a2035] border border-[#c9a84c]/20 hover:border-[#c9a84c]/50 hover:bg-[#c9a84c]/10 text-white/50 hover:text-[#f0c040] rounded-full p-1.5 transition-all duration-200 z-10 ${minimized ? '' : 'hidden lg:block'}`}
             title={minimized ? "Expand Sidebar" : "Collapse Sidebar"}
@@ -197,7 +197,7 @@ export function Sidebar() {
 
         {/* Close Button - Mobile Only */}
         {isMobile && (
-          <button 
+          <button
             onClick={() => setMobileOpen(false)}
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 transition-colors"
           >
@@ -217,8 +217,8 @@ export function Sidebar() {
 
           const baseBtnClass = `flex items-center rounded-xl text-[13px] transition-all duration-200 mb-1 group relative
             ${minimized ? 'justify-center p-3' : 'justify-between px-3 py-2.5'}
-            ${(isGroupActive || isActive) 
-              ? 'bg-gradient-to-r from-[#c9a84c] to-[#f0c040] text-[#0a0900] font-bold shadow-[0_2px_14px_rgba(201,168,76,.3)]' 
+            ${(isGroupActive || isActive)
+              ? 'bg-gradient-to-r from-[#c9a84c] to-[#f0c040] text-[#0a0900] font-bold shadow-[0_2px_14px_rgba(201,168,76,.3)]'
               : 'text-[#c8cdd7]/60 font-medium hover:bg-[#c9a84c]/10 hover:text-[#e0c070]'}`;
 
           // Tooltip for minimized state
@@ -249,7 +249,7 @@ export function Sidebar() {
                 </button>
 
                 {/* Sub-items */}
-                <div 
+                <div
                   className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen && !minimized ? 'max-h-[400px] opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0'}`}
                 >
                   <div className="ml-4 pl-3 border-l-2 border-[#c9a84c]/15 flex flex-col gap-1">
@@ -259,8 +259,8 @@ export function Sidebar() {
                         <Link
                           key={sub.name} href={sub.href}
                           className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all duration-200 whitespace-nowrap
-                            ${isSubActive 
-                              ? 'bg-[#c9a84c]/15 text-[#f0c040] font-bold border border-[#c9a84c]/20' 
+                            ${isSubActive
+                              ? 'bg-[#c9a84c]/15 text-[#f0c040] font-bold border border-[#c9a84c]/20'
                               : 'text-[#c8cdd7]/50 font-medium hover:bg-[#c9a84c]/5 hover:text-[#e0c070]'}`}
                         >
                           <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors ${isSubActive ? 'bg-[#f0c040]' : 'bg-[#c9a84c]/30'}`} />
@@ -298,13 +298,13 @@ export function Sidebar() {
             {installSuccess ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <Download className="w-5 h-5 flex-shrink-0" />}
             {!minimized && <span>{installSuccess ? 'Installed!' : 'Install App'}</span>}
             {minimized && (
-               <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1a2035] border border-[#c9a84c]/20 text-[#e0c070] text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                 Install App
-               </div>
+              <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1a2035] border border-[#c9a84c]/20 text-[#e0c070] text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                Install App
+              </div>
             )}
           </button>
         )}
-        
+
         <button
           onClick={() => signOut()}
           className={`flex items-center rounded-xl text-[13px] font-medium transition-all duration-200 w-full text-[#c8cdd7]/40 hover:bg-red-500/10 hover:text-red-400 group relative
@@ -313,15 +313,16 @@ export function Sidebar() {
           <LogOut className="w-5 h-5 flex-shrink-0" />
           {!minimized && <span>Sign Out</span>}
           {minimized && (
-             <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1a2035] border border-red-500/20 text-red-400 text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-               Sign Out
-             </div>
+            <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1a2035] border border-red-500/20 text-red-400 text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+              Sign Out
+            </div>
           )}
         </button>
       </div>
-      
+
       {/* Scrollbar styling for Webkit browsers */}
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 4px; }

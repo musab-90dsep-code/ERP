@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Plus, Trash2, FileText, ShoppingCart, ArrowLeftRight, Calculator, CreditCard, PenTool, CheckCircle, PackageSearch, Banknote, Building2, Wallet, Eye } from 'lucide-react';
+import { Plus, Trash2, FileText, ShoppingCart, ArrowLeftRight, Calculator, CreditCard, PenTool, CheckCircle, PackageSearch, Banknote, Building2, Wallet, Eye, X, Printer } from 'lucide-react';
 
 type InvoiceType = 'buy' | 'sell' | 'return';
 type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'bank_to_bank_transfer' | 'cheque';
@@ -81,7 +81,7 @@ function InvoicesContent() {
                const totalReturnDue = (invs || []).filter((i: any) => i.type === 'return').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
                const standalonePaysIn = (pays || []).filter((p: any) => p.type === 'in' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
                const standalonePaysOut = (pays || []).filter((p: any) => p.type === 'out' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               
+
                due = (totalSellDue - totalReturnDue) - (standalonePaysIn - standalonePaysOut);
             } else if (activeTab === 'buy') {
                // Supplier Ledger: Sum of all unpaid 'buy' balances minus unpaid returns, minus extra standalone payments
@@ -142,24 +142,24 @@ function InvoicesContent() {
 
    const fetchData = async () => {
       try {
-        const targetType = activeTab === 'buy' ? 'supplier' : 'customer';
-        const [pData, cData, eData, accData] = await Promise.all([
-           api.getProducts({}),
-           api.getContacts({ type: targetType }),
-           api.getEmployees({}),
-           api.getInternalAccounts({ ordering: 'provider_name' }),
-        ]);
-        setProducts(Array.isArray(pData) ? pData : pData.results ?? []);
-        setContacts(Array.isArray(cData) ? cData : cData.results ?? []);
-        setEmployees(Array.isArray(eData) ? eData : eData.results ?? []);
-        setInternalAccounts(Array.isArray(accData) ? accData : accData.results ?? []);
+         const targetType = activeTab === 'buy' ? 'supplier' : 'customer';
+         const [pData, cData, eData, accData] = await Promise.all([
+            api.getProducts({}),
+            api.getContacts({ type: targetType }),
+            api.getEmployees({}),
+            api.getInternalAccounts({ ordering: 'provider_name' }),
+         ]);
+         setProducts(Array.isArray(pData) ? pData : pData.results ?? []);
+         setContacts(Array.isArray(cData) ? cData : cData.results ?? []);
+         setEmployees(Array.isArray(eData) ? eData : eData.results ?? []);
+         setInternalAccounts(Array.isArray(accData) ? accData : accData.results ?? []);
       } catch (err) { console.error('fetchData:', err); }
    };
 
    const fetchInvoices = async () => {
       try {
-        const data = await api.getInvoices({ type: activeTab, ordering: '-created_at' });
-        setInvoices(Array.isArray(data) ? data : data.results ?? []);
+         const data = await api.getInvoices({ type: activeTab, ordering: '-created_at' });
+         setInvoices(Array.isArray(data) ? data : data.results ?? []);
       } catch (err) { console.error('fetchInvoices:', err); }
    };
 
@@ -192,8 +192,8 @@ function InvoicesContent() {
          const prod = products.find(p => p.id === finalValue);
          if (prod) {
             newItems[index].price = Number(prod.price || 0);
-            newItems[index].selected_head = ''; 
-            
+            newItems[index].selected_head = '';
+
             // Adjust quantity immediately if the new product has lower stock
             if (activeTab === 'sell' && prod.stock_quantity !== undefined) {
                const available = Number(prod.stock_quantity);
@@ -308,14 +308,14 @@ function InvoicesContent() {
 
                try {
                   await api.updateProduct?.(p.id, { stock_quantity: newStock }).catch(async () => {
-                    // Fallback to fetch directly since api doesn't expose updateProduct in api.ts
-                    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/`, {
-                       method: 'POST',
-                       headers: { 'Content-Type': 'application/json' },
-                       body: JSON.stringify({ model: 'product', action: 'update', id: p.id, data: { stock_quantity: newStock } })
-                    });
+                     // Fallback to fetch directly since api doesn't expose updateProduct in api.ts
+                     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: 'product', action: 'update', id: p.id, data: { stock_quantity: newStock } })
+                     });
                   });
-               } catch (e) {}
+               } catch (e) { }
             }
          }
 
@@ -345,8 +345,8 @@ function InvoicesContent() {
    const handleDelete = async (id: string) => {
       if (!window.confirm("Delete this invoice completely?")) return;
       try {
-        await api.deleteInvoice(id);
-        fetchInvoices();
+         await api.deleteInvoice(id);
+         fetchInvoices();
       } catch (err) { console.error('deleteInvoice:', err); }
    };
 
@@ -359,22 +359,22 @@ function InvoicesContent() {
    };
 
    const inp: React.CSSProperties = {
-      width:'100%', padding:'9px 12px',
-      background:'rgba(255,255,255,.06)', border:'1px solid ' + N.border,
-      borderRadius:9, color:N.text, fontSize:13, outline:'none',
+      width: '100%', padding: '9px 12px',
+      background: 'rgba(255,255,255,.06)', border: '1px solid ' + N.border,
+      borderRadius: 9, color: N.text, fontSize: 13, outline: 'none',
    };
    const lbl: React.CSSProperties = {
-      display:'block', fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:'.05em',
-      color:'rgba(201,168,76,.65)', marginBottom:6,
+      display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em',
+      color: 'rgba(201,168,76,.65)', marginBottom: 6,
    };
 
    const renderPaymentDetails = () => {
       if (['bikash', 'nagad', 'rocket', 'upay'].includes(form.payment_method)) {
          return (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
-               <div style={{ gridColumn:'1/-1' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16, padding: 16, background: 'rgba(255,255,255,.02)', borderRadius: 12, border: '1px solid ' + N.borderSub }}>
+               <div style={{ gridColumn: '1/-1' }}>
                   <label style={lbl}>{activeTab === 'sell' ? 'Receiving To (Your Account)' : 'Paying From (Your Account)'}</label>
-                  <select required value={form.payment_details.internal_account_id || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value } })} style={{ ...inp, background:N.card2 }}>
+                  <select required value={form.payment_details.internal_account_id || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value } })} style={{ ...inp, background: N.card2 }}>
                      <option value="" disabled>Select your {form.payment_method} account</option>
                      {internalAccounts.filter(acc => acc.account_type === 'wallet' && acc.provider_name.toLowerCase() === form.payment_method.toLowerCase()).map(acc => (
                         <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number} {acc.account_name ? '(' + acc.account_name + ')' : ''}</option>
@@ -388,7 +388,7 @@ function InvoicesContent() {
                {activeTab !== 'return' && (
                   <div>
                      <label style={lbl}>Transaction ID</label>
-                     <input required placeholder="TRX..." type="text" value={form.payment_details.transaction_id || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, transaction_id: e.target.value } })} style={{ ...inp, fontFamily:'monospace', textTransform:'uppercase' }} />
+                     <input required placeholder="TRX..." type="text" value={form.payment_details.transaction_id || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, transaction_id: e.target.value } })} style={{ ...inp, fontFamily: 'monospace', textTransform: 'uppercase' }} />
                   </div>
                )}
             </div>
@@ -400,12 +400,12 @@ function InvoicesContent() {
          const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
 
          return (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16, padding: 16, background: 'rgba(255,255,255,.02)', borderRadius: 12, border: '1px solid ' + N.borderSub }}>
                <div>
                   <label style={lbl}>Your Bank Account</label>
                   <select required value={form.payment_details.internal_account_id || ''} onChange={e => {
                      setForm({ ...form, payment_details: { ...form.payment_details, internal_account_id: e.target.value } });
-                  }} style={{ ...inp, background:N.card2 }}>
+                  }} style={{ ...inp, background: N.card2 }}>
                      <option value="" disabled>Select your Bank Account</option>
                      {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
                         <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
@@ -420,17 +420,17 @@ function InvoicesContent() {
                      if (selectedBank) {
                         setForm({ ...form, payment_details: { ...form.payment_details, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch } });
                      }
-                  }} style={{ ...inp, background:N.card2 }}>
+                  }} style={{ ...inp, background: N.card2 }}>
                      <option value="|" disabled>Select Partner Bank Account</option>
                      {contactBanks.map((b: any, idx: number) => {
                         if (!b.bank_name) return null;
                         return <option key={idx} value={b.bank_name + '|' + b.account_number}>{b.bank_name} - {b.account_number}</option>
                      })}
                   </select>
-                  {contactBanks.length === 0 && <span style={{ fontSize:10, color:N.red, fontWeight:800, marginTop:4, display:'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
+                  {contactBanks.length === 0 && <span style={{ fontSize: 10, color: N.red, fontWeight: 800, marginTop: 4, display: 'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
                </div>
 
-               <div style={{ gridColumn:'1/-1' }}>
+               <div style={{ gridColumn: '1/-1' }}>
                   <label style={lbl}>Transfer Date and Time</label>
                   <input required type="datetime-local" value={form.payment_details.datetime || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, datetime: e.target.value } })} style={inp} />
                </div>
@@ -443,8 +443,8 @@ function InvoicesContent() {
          const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
 
          return (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
-               <div style={{ gridColumn:'1/-1' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16, padding: 16, background: 'rgba(255,255,255,.02)', borderRadius: 12, border: '1px solid ' + N.borderSub }}>
+               <div style={{ gridColumn: '1/-1' }}>
                   <label style={lbl}>{activeTab === 'sell' ? "Customer's Bank Account" : "Supplier's Bank Account"}</label>
                   <select required value={form.payment_details.bank_name ? (form.payment_details.bank_name + '|' + form.payment_details.account_number) : '|'} onChange={e => {
                      const val = e.target.value;
@@ -452,16 +452,16 @@ function InvoicesContent() {
                      if (selectedBank) {
                         setForm({ ...form, payment_details: { ...form.payment_details, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch } });
                      }
-                  }} style={{ ...inp, background:N.card2 }}>
+                  }} style={{ ...inp, background: N.card2 }}>
                      <option value="|" disabled>Select Partner Bank Account</option>
                      {contactBanks.map((b: any, idx: number) => {
                         if (!b.bank_name) return null;
                         return <option key={idx} value={b.bank_name + '|' + b.account_number}>{b.bank_name} - {b.account_number}</option>
                      })}
                   </select>
-                  {contactBanks.length === 0 && <span style={{ fontSize:10, color:N.red, fontWeight:800, marginTop:4, display:'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
+                  {contactBanks.length === 0 && <span style={{ fontSize: 10, color: N.red, fontWeight: 800, marginTop: 4, display: 'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
                </div>
-               <div style={{ gridColumn:'1/-1' }}>
+               <div style={{ gridColumn: '1/-1' }}>
                   <label style={lbl}>{activeTab === 'sell' ? "Receive Date and Time" : "Send Date and Time"}</label>
                   <input required type="datetime-local" value={form.payment_details.datetime || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, datetime: e.target.value } })} style={inp} />
                </div>
@@ -474,8 +474,8 @@ function InvoicesContent() {
          const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
 
          return (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:16, padding:16, background:'rgba(255,255,255,.02)', borderRadius:12, border:'1px solid ' + N.borderSub }}>
-               <div style={{ gridColumn:'1/-1' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16, padding: 16, background: 'rgba(255,255,255,.02)', borderRadius: 12, border: '1px solid ' + N.borderSub }}>
+               <div style={{ gridColumn: '1/-1' }}>
                   <label style={lbl}>{activeTab === 'sell' ? "Customer's Bank Account" : "Supplier's Bank Account"}</label>
                   <select required value={form.payment_details.bank_name ? form.payment_details.bank_name + '|' + form.payment_details.account_number : '|'} onChange={e => {
                      const val = e.target.value;
@@ -483,18 +483,18 @@ function InvoicesContent() {
                      if (selectedBank) {
                         setForm({ ...form, payment_details: { ...form.payment_details, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch } });
                      }
-                  }} style={{ ...inp, background:N.card2 }}>
+                  }} style={{ ...inp, background: N.card2 }}>
                      <option value="|" disabled>Select Partner Bank Account</option>
                      {contactBanks.map((b: any, idx: number) => {
                         if (!b.bank_name) return null;
                         return <option key={idx} value={b.bank_name + '|' + b.account_number}>{b.bank_name} - {b.account_number}</option>
                      })}
                   </select>
-                  {contactBanks.length === 0 && <span style={{ fontSize:10, color:N.red, fontWeight:800, marginTop:4, display:'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
+                  {contactBanks.length === 0 && <span style={{ fontSize: 10, color: N.red, fontWeight: 800, marginTop: 4, display: 'block' }}>No banks added to this contact yet. Please add in Contacts manager.</span>}
                </div>
                <div>
                   <label style={lbl}>Cheque Number</label>
-                  <input required type="text" value={form.payment_details.cheque_number || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, cheque_number: e.target.value } })} style={{ ...inp, fontFamily:'monospace' }} />
+                  <input required type="text" value={form.payment_details.cheque_number || ''} onChange={e => setForm({ ...form, payment_details: { ...form.payment_details, cheque_number: e.target.value } })} style={{ ...inp, fontFamily: 'monospace' }} />
                </div>
                <div>
                   <label style={lbl}>Cheque Date</label>
@@ -523,16 +523,16 @@ function InvoicesContent() {
    return (
       <div className="pb-12 dropdown-container" style={{ fontFamily: "'Inter', sans-serif" }}>
          <div style={{
-             background: 'linear-gradient(135deg, #0e1628, #131929)',
-             border: '1px solid ' + N.border,
-             borderRadius: 16,
-             padding: '24px 30px',
-             marginBottom: 20,
-             display: 'flex',
-             justifyContent: 'space-between',
-             alignItems: 'flex-end',
-             flexWrap: 'wrap',
-             gap: 16
+            background: 'linear-gradient(135deg, #0e1628, #131929)',
+            border: '1px solid ' + N.border,
+            borderRadius: 16,
+            padding: '24px 30px',
+            marginBottom: 20,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            gap: 16
          }}>
             <div>
                <p style={{ color: N.gold, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -543,16 +543,18 @@ function InvoicesContent() {
                </h1>
                <p style={{ color: N.textSub, fontSize: 13, margin: 0 }}>
                   {activeTab === 'buy' ? 'Record vendor purchases, process upfront payments.' :
-                   activeTab === 'sell' ? 'Generate customer invoices and track revenue.' :
-                   'Process returns and log refunds.'}
+                     activeTab === 'sell' ? 'Generate customer invoices and track revenue.' :
+                        'Process returns and log refunds.'}
                </p>
             </div>
 
             {!showBuilder && (
                <button onClick={() => { resetForm(); setShowBuilder(true); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10,
+                  style={{
+                     display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10,
                      border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')',
-                     color: '#0a0900', fontWeight: 800, fontSize: 13, boxShadow: '0 4px 14px rgba(201,168,76,.35)' }}>
+                     color: '#0a0900', fontWeight: 800, fontSize: 13, boxShadow: '0 4px 14px rgba(201,168,76,.35)'
+                  }}>
                   <Plus style={{ width: 16, height: 16 }} />
                   Create {activeTab === 'buy' ? 'Purchase' : activeTab === 'sell' ? 'Sale' : 'Return'}
                </button>
@@ -582,11 +584,11 @@ function InvoicesContent() {
                            </tr>
                         )}
                         {invoices.map((inv, i) => (
-                           <tr key={inv.id} 
-                               onClick={() => setViewingInvoice(inv)}
-                               style={{ borderBottom: i < invoices.length - 1 ? '1px solid ' + N.borderSub : 'none', transition: 'background .12s', cursor: 'pointer' }}
-                               onMouseEnter={e => e.currentTarget.style.background = 'rgba(201,168,76,.04)'}
-                               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                           <tr key={inv.id}
+                              onClick={() => setViewingInvoice(inv)}
+                              style={{ borderBottom: i < invoices.length - 1 ? '1px solid ' + N.borderSub : 'none', transition: 'background .12s', cursor: 'pointer' }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(201,168,76,.04)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                               <td style={{ padding: '13px 20px' }}>
                                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: N.text }}>#{inv.id.substring(0, 8).toUpperCase()}</span>
                                  <div style={{ fontSize: 11, color: N.textSub, marginTop: 2 }}>{new Date(inv.date).toLocaleDateString()}</div>
@@ -641,7 +643,7 @@ function InvoicesContent() {
                <form onSubmit={handleSubmit}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24, padding: 16, background: 'rgba(255,255,255,.02)', borderRadius: 12, border: '1px solid ' + N.borderSub }}>
                      <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={lbl}><FileText style={{ width:12, height:12, display:'inline-block', marginRight:4 }} /> Memo no</label>
+                        <label style={lbl}><FileText style={{ width: 12, height: 12, display: 'inline-block', marginRight: 4 }} /> Memo no</label>
                         <input type="text" disabled value="[ Auto-generated upon save ]" style={{ ...inp, color: N.textMut, background: 'transparent', border: '1px dashed ' + N.borderSub, cursor: 'not-allowed' }} />
                      </div>
                      <div>
@@ -844,11 +846,11 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
    const [loading, setLoading] = useState(true);
 
    const N = {
-     bg: '#0b0f1a', card: '#131929', card2: '#1a2235',
-     gold: '#c9a84c', goldBr: '#f0c040', goldFt: 'rgba(201,168,76,.10)',
-     border: 'rgba(201,168,76,.18)', borderSub: 'rgba(255,255,255,.06)',
-     text: '#e8eaf0', textSub: 'rgba(255,255,255,.45)', textMut: 'rgba(255,255,255,.28)',
-     green: '#34d399', red: '#f87171', blue: '#60a5fa', orange: '#fb923c'
+      bg: '#0b0f1a', card: '#131929', card2: '#1a2235',
+      gold: '#c9a84c', goldBr: '#f0c040', goldFt: 'rgba(201,168,76,.10)',
+      border: 'rgba(201,168,76,.18)', borderSub: 'rgba(255,255,255,.06)',
+      text: '#e8eaf0', textSub: 'rgba(255,255,255,.45)', textMut: 'rgba(255,255,255,.28)',
+      green: '#34d399', red: '#f87171', blue: '#60a5fa', orange: '#fb923c'
    };
 
    useEffect(() => {
@@ -865,10 +867,21 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
       fetchDetails();
    }, [invoice.id]);
 
+   const handlePrintInvoice = () => { window.print(); };
+
    return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(5px)', padding: 16 }}>
-         <div style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 20, width: '100%', maxWidth: 840, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.8)' }}>
-            <div style={{ padding: '20px 24px', background: 'linear-gradient(135deg, rgba(201,168,76,.15), rgba(201,168,76,.05))', borderBottom: '1px solid ' + N.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.8)', backdropFilter: 'blur(5px)', padding: 16 }}>
+         <style>{`
+            @media print {
+               body * { visibility: hidden; }
+               #printable-memo, #printable-memo * { visibility: visible; }
+               #printable-memo { position: absolute; left: 0; top: 0; width: 100%; color: black !important; background: white !important; }
+               .no-print { display: none !important; }
+            }
+         `}</style>
+         
+         <div className="invoice-memo-container" style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 20, width: '100%', maxWidth: 840, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.8)', overflow:'hidden' }}>
+            <div className="no-print" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, rgba(201,168,76,.15), rgba(201,168,76,.05))', borderBottom: '1px solid ' + N.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                <div>
                   <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: N.gold }}>
                      {invoice.type === 'buy' ? 'Purchase Invoice' : invoice.type === 'sell' ? 'Sales Invoice' : 'Return Invoice'}
@@ -876,96 +889,109 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
                   <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: N.text, display: 'flex', alignItems: 'center', gap: 10 }}>
                      <FileText style={{ width: 20, height: 20, color: N.goldBr }} /> #{invoice.id.substring(0, 8).toUpperCase()}
                   </h2>
-                  <p style={{ margin: '4px 0 0', fontSize: 12, color: N.textSub }}>{new Date(invoice.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                </div>
                <button onClick={onClose} style={{ background: 'rgba(255,255,255,.05)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: N.textMut }}>
-                  <Eye style={{ width: 16, height: 16 }} />
+                  <X size={18} />
                </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-                  <div style={{ background: 'rgba(255,255,255,.02)', padding: 16, borderRadius: 12, border: '1px solid ' + N.borderSub }}>
-                     <h3 style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 800, color: N.textMut, textTransform: 'uppercase', letterSpacing: '.05em' }}>{invoice.type === 'buy' ? 'Supplier' : 'Customer'}</h3>
-                     <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: N.text }}>{invoice.contact_details?.name || invoice.contacts?.name || 'Unknown'}</p>
-                     {(invoice.contact_details?.shop_name || invoice.contacts?.shop_name) && <p style={{ margin: '4px 0 0', fontSize: 12, color: N.gold }}>{invoice.contact_details?.shop_name || invoice.contacts?.shop_name}</p>}
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,.02)', padding: 16, borderRadius: 12, border: '1px solid ' + N.borderSub }}>
-                     <h3 style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 800, color: N.textMut, textTransform: 'uppercase', letterSpacing: '.05em' }}>Payment Status</h3>
-                     <span style={{
-                        display: 'inline-flex', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em',
-                        background: invoice.payment_status === 'paid' ? 'rgba(52,211,153,.1)' : invoice.payment_status === 'partial' ? 'rgba(201,168,76,.1)' : 'rgba(248,113,113,.1)',
-                        color: invoice.payment_status === 'paid' ? N.green : invoice.payment_status === 'partial' ? N.gold : N.red,
-                        border: '1px solid ' + (invoice.payment_status === 'paid' ? 'rgba(52,211,153,.2)' : invoice.payment_status === 'partial' ? 'rgba(201,168,76,.2)' : 'rgba(248,113,113,.2)')
-                     }}>
-                        {invoice.payment_status}
-                     </span>
-                     {invoice.authorized_signature && <p style={{ margin: '8px 0 0', fontSize: 11, color: N.textSub }}>Auth by: {invoice.authorized_signature}</p>}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 40, background: 'white', color: 'black' }} id="printable-memo">
+               {/* --- MEMO HEADER --- */}
+               <div style={{ textAlign: 'center', marginBottom: 40, borderBottom: '3px solid black', paddingBottom: 20 }}>
+                  <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, letterSpacing: '4px', textTransform: 'uppercase' }}>MEMORANDUM</h1>
+                  <p style={{ margin: '8px 0', fontSize: 14, fontWeight: 700 }}>{invoice.type === 'sell' ? 'Sales Invoice' : invoice.type === 'buy' ? 'Purchase Record' : 'Return Credit Note'}</p>
+                  <div style={{ display:'flex', justifyContent:'center', gap:20, marginTop:10, fontSize:12 }}>
+                     <span><strong>ID:</strong> #{invoice.id.substring(0, 12).toUpperCase()}</span>
+                     <span><strong>DATE:</strong> {new Date(invoice.date).toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' })}</span>
                   </div>
                </div>
 
-               <div style={{ background: N.card2, borderRadius: 12, border: '1px solid ' + N.borderSub, overflow: 'hidden', marginBottom: 24 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                     <thead>
-                        <tr style={{ background: 'rgba(201,168,76,.06)' }}>
-                           <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Product</th>
-                           <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Qty</th>
-                           <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Price</th>
-                           <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Subtotal</th>
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginBottom: 40 }}>
+                  <div>
+                     <h3 style={{ margin: '0 0 10px', fontSize: 12, textTransform: 'uppercase', color: '#666' }}>{invoice.type === 'buy' ? 'Vendor / Supplier:' : 'Bill To / Customer:'}</h3>
+                     <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{invoice.contact_details?.name || invoice.contacts?.name || 'Walk-in Customer'}</p>
+                     <p style={{ margin: '4px 0', fontSize: 14 }}>{invoice.contact_details?.shop_name || invoice.contacts?.shop_name || ''}</p>
+                     <p style={{ margin: 0, fontSize: 14 }}>{invoice.contact_details?.phone || invoice.contacts?.phone || ''}</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                     <h3 style={{ margin: '0 0 10px', fontSize: 12, textTransform: 'uppercase', color: '#666' }}>Payment Summary:</h3>
+                     <p style={{ margin: 0, fontSize: 16 }}>Status: <strong style={{ color: invoice.payment_status === 'paid' ? 'green' : 'red' }}>{invoice.payment_status.toUpperCase()}</strong></p>
+                     <p style={{ margin: '4px 0', fontSize: 14 }}>Method: {invoice.payment_method?.toUpperCase() || 'CASH'}</p>
+                  </div>
+               </div>
+
+               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 40 }}>
+                  <thead>
+                     <tr style={{ borderBottom: '2px solid black' }}>
+                        <th style={{ padding: '12px 0', textAlign: 'left', fontSize: 12, textTransform: 'uppercase' }}>Description</th>
+                        <th style={{ padding: '12px 0', textAlign: 'right', fontSize: 12, textTransform: 'uppercase', width: 80 }}>Qty</th>
+                        <th style={{ padding: '12px 0', textAlign: 'right', fontSize: 12, textTransform: 'uppercase', width: 120 }}>Unit Price</th>
+                        <th style={{ padding: '12px 0', textAlign: 'right', fontSize: 12, textTransform: 'uppercase', width: 140 }}>Amount</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     {items.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                           <td style={{ padding: '12px 0', fontSize: 14 }}>
+                              <div style={{ fontWeight: 700 }}>{item.product_name}</div>
+                              {item.selected_head && <div style={{ fontSize: 12, color: '#666' }}>Variant: {item.selected_head}</div>}
+                           </td>
+                           <td style={{ padding: '12px 0', textAlign: 'right', fontSize: 14 }}>{item.quantity}</td>
+                           <td style={{ padding: '12px 0', textAlign: 'right', fontSize: 14 }}>৳{Number(item.price).toLocaleString()}</td>
+                           <td style={{ padding: '12px 0', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>৳{Number(item.subtotal).toLocaleString()}</td>
                         </tr>
-                     </thead>
-                     <tbody>
-                        {loading ? (
-                           <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: N.gold, fontSize: 13, fontWeight: 600 }}>Loading items...</td></tr>
-                        ) : items.length === 0 ? (
-                           <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: N.textMut, fontSize: 13 }}>No items found.</td></tr>
-                        ) : items.map((item, idx) => (
-                           <tr key={idx} style={{ borderBottom: idx < items.length - 1 ? '1px solid ' + N.borderSub : 'none' }}>
-                              <td style={{ padding: '12px 16px', fontSize: 13, color: N.text, fontWeight: 600 }}>
-                                 {item.product_name || 'Unknown'}
-                                 {item.selected_head && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, fontSize: 10, background: 'rgba(255,255,255,.05)', color: N.textSub }}>{item.selected_head}</span>}
-                              </td>
-                              <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, color: N.text }}>{item.quantity} <span style={{ fontSize: 11, color: N.textMut }}>{item.product_unit || ''}</span></td>
-                              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: N.textSub }}>৳ {Number(item.price).toLocaleString()}</td>
-                              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: N.goldBr }}>৳ {Number(item.subtotal).toLocaleString()}</td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               </div>
+                     ))}
+                  </tbody>
+               </table>
 
-               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <div style={{ width: 340, background: 'rgba(255,255,255,.02)', borderRadius: 12, padding: 20, border: '1px solid ' + N.borderSub }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 13, color: N.textSub }}>
+               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 60 }}>
+                  <div style={{ width: 300 }}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14 }}>
                         <span>Subtotal:</span>
-                        <span style={{ fontFamily: 'monospace', color: N.text, fontWeight: 700 }}>৳ {Number(invoice.subtotal).toLocaleString()}</span>
+                        <span>৳{Number(invoice.subtotal).toLocaleString()}</span>
                      </div>
                      {Number(invoice.discount) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: 13, color: N.gold }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, color: 'red' }}>
                            <span>Discount:</span>
-                           <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>- ৳ {Number(invoice.discount).toLocaleString()}</span>
+                           <span>- ৳{Number(invoice.discount).toLocaleString()}</span>
                         </div>
                      )}
-                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid ' + N.borderSub, fontSize: 18, fontWeight: 900, color: N.text }}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid black', marginTop: 10, fontWeight: 900, fontSize: 20 }}>
                         <span>Total:</span>
-                        <span style={{ fontFamily: 'monospace', color: N.goldBr }}>৳ {Number(invoice.total).toLocaleString()}</span>
+                        <span>৳{Number(invoice.total).toLocaleString()}</span>
                      </div>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: '1px dashed ' + N.borderSub, fontSize: 13, fontWeight: 800, color: N.green }}>
-                        <span>Paid:</span>
-                        <span style={{ fontFamily: 'monospace' }}>৳ {Number(invoice.paid_amount).toLocaleString()}</span>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, fontWeight: 700, color: 'green' }}>
+                        <span>Amount Paid:</span>
+                        <span>৳{Number(invoice.paid_amount).toLocaleString()}</span>
                      </div>
                      {Number(invoice.due_amount) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13, fontWeight: 800, color: N.red }}>
-                           <span>Due:</span>
-                           <span style={{ fontFamily: 'monospace' }}>৳ {Number(invoice.due_amount).toLocaleString()}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, fontWeight: 700, color: 'red' }}>
+                           <span>Balance Due:</span>
+                           <span>৳{Number(invoice.due_amount).toLocaleString()}</span>
                         </div>
                      )}
                   </div>
+               </div>
+
+               <div style={{ marginTop: 100, display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ textAlign: 'center', width: 220 }}>
+                     <div style={{ borderTop: '1px solid black', paddingTop: 10, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Customer Signature</div>
+                  </div>
+                  <div style={{ textAlign: 'center', width: 220 }}>
+                     <div style={{ borderTop: '1px solid black', paddingTop: 10, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Authorized Signature</div>
+                     {invoice.authorized_signature && <div style={{ fontSize: 11, marginTop: 4 }}>({invoice.authorized_signature})</div>}
+                  </div>
+               </div>
+
+               <div style={{ marginTop: 40, textAlign: 'center', fontSize: 10, color: '#999', fontStyle: 'italic' }}>
+                  This is a computer generated document. No signature is required.
                </div>
             </div>
 
-            <div style={{ padding: '16px 24px', background: 'rgba(255,255,255,.02)', borderTop: '1px solid ' + N.borderSub, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-               <button style={{ padding: '10px 20px', borderRadius: 10, border: '1px dashed ' + N.border, background: 'rgba(201,168,76,.05)', color: N.gold, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Print Invoice</button>
+            <div className="no-print" style={{ padding: '16px 24px', background: 'rgba(255,255,255,.02)', borderTop: '1px solid ' + N.borderSub, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+               <button onClick={handlePrintInvoice} style={{ display:'flex', alignItems:'center', gap:8, padding: '10px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')', color: 'black', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                  <Printer size={16} /> Print Memo
+               </button>
                <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid ' + N.borderSub, background: 'transparent', color: N.text, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Close</button>
             </div>
          </div>
