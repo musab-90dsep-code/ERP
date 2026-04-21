@@ -26,7 +26,7 @@ const navItems = [
     subItems: [
       { name: 'Buy Invoices', href: '/invoices?tab=buy' },
       { name: 'Sell Invoices', href: '/invoices?tab=sell' },
-      { name: 'Sells Returns', href: '/invoices?tab=return' },
+      { name: 'Sells Returns', href: '/invoices?tab=exchange' },
     ]
   },
   {

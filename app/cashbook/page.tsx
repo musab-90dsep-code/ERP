@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowLeft, ArrowDownLeft, ArrowUpRight, TrendingDown, Banknote, Search, 
+import {
+  ArrowLeft, ArrowDownLeft, ArrowUpRight, TrendingDown, Banknote, Search,
   Filter, Download, Printer, Calendar, X, ChevronDown, FileSpreadsheet
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -13,13 +13,13 @@ type TabType = 'inflow' | 'outflow';
 function CashbookContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  
+
   const [activeTab, setActiveTab] = useState<TabType>(tabParam === 'outflow' ? 'outflow' : 'inflow');
   const [loading, setLoading] = useState(true);
   const [inflowLog, setInflowLog] = useState<any[]>([]);
   const [outflowLog, setOutflowLog] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Advanced Filters
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
@@ -57,7 +57,7 @@ function CashbookContent() {
   };
 
   const currentData = useMemo(() => activeTab === 'inflow' ? inflowLog : outflowLog, [activeTab, inflowLog, outflowLog]);
-  
+
   const uniqueMethods = useMemo(() => {
     const methods = currentData.map(item => item.method || 'Cash');
     return Array.from(new Set(methods));
@@ -71,11 +71,11 @@ function CashbookContent() {
   const filteredData = useMemo(() => {
     return currentData.filter(item => {
       // Search term filter
-      const matchesSearch = 
+      const matchesSearch =
         item.source?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.label?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.amount?.toString().includes(searchTerm);
-      
+
       if (!matchesSearch) return false;
 
       // Date filter
@@ -105,7 +105,7 @@ function CashbookContent() {
 
   const handleDownloadCSV = () => {
     if (filteredData.length === 0) return;
-    
+
     const headers = ['Date', 'Source', 'Type', 'Method', 'Amount'];
     const rows = filteredData.map(item => [
       new Date(item.date).toLocaleDateString(),
@@ -115,7 +115,7 @@ function CashbookContent() {
       item.amount
     ]);
 
-    let csvContent = "data:text/csv;charset=utf-8," 
+    let csvContent = "data:text/csv;charset=utf-8,"
       + headers.join(",") + "\n"
       + rows.map(e => e.join(",")).join("\n");
 
@@ -194,14 +194,14 @@ function CashbookContent() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleDownloadCSV}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#131929] border border-[rgba(255,255,255,0.05)] text-[#e8eaf0] text-xs font-bold uppercase tracking-widest hover:bg-[#1a2235] hover:border-[#c9a84c]/30 transition-all"
           >
             <Download className="w-4 h-4 text-[#c9a84c]" />
             Export CSV
           </button>
-          <button 
+          <button
             onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#c9a84c] text-[#0a0900] text-xs font-black uppercase tracking-widest hover:brightness-110 shadow-[0_4px_14px_rgba(201,168,76,0.3)] transition-all"
           >
@@ -222,17 +222,15 @@ function CashbookContent() {
         <div className="flex items-center bg-[#131929] p-1.5 rounded-xl border border-[rgba(255,255,255,0.05)] w-fit">
           <button
             onClick={() => setActiveTab('inflow')}
-            className={`px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
-              activeTab === 'inflow' ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'text-[#8a95a8] hover:text-white'
-            }`}
+            className={`px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'inflow' ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'text-[#8a95a8] hover:text-white'
+              }`}
           >
             Cash Inflow
           </button>
           <button
             onClick={() => setActiveTab('outflow')}
-            className={`px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
-              activeTab === 'outflow' ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'text-[#8a95a8] hover:text-white'
-            }`}
+            className={`px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'outflow' ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'text-[#8a95a8] hover:text-white'
+              }`}
           >
             Cash Outflow
           </button>
@@ -249,13 +247,12 @@ function CashbookContent() {
               className="w-full bg-[#131929] text-white text-sm font-medium pl-10 pr-4 py-3 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] focus:outline-none focus:ring-1 focus:ring-[#c9a84c] transition-all"
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all ${
-              showFilters 
-                ? 'bg-[#c9a84c]/10 border-[#c9a84c] text-[#c9a84c]' 
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all ${showFilters
+                ? 'bg-[#c9a84c]/10 border-[#c9a84c] text-[#c9a84c]'
                 : 'bg-[#131929] border-[rgba(255,255,255,0.05)] text-[#8a95a8] hover:text-white'
-            }`}
+              }`}
           >
             <Filter className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-widest">Filters</span>
@@ -283,11 +280,11 @@ function CashbookContent() {
               <label className="block text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-2.5">Start Date</label>
               <div className="relative">
                 <Calendar className="w-4 h-4 text-[#4a5568] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={filters.startDate}
-                  onChange={(e) => setFilters({...filters, startDate: e.target.value})}
-                  className="w-full bg-[#0b0f1a] text-white text-sm font-medium pl-10 pr-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] outline-none transition-all" 
+                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                  className="w-full bg-[#0b0f1a] text-white text-sm font-medium pl-10 pr-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] outline-none transition-all"
                 />
               </div>
             </div>
@@ -296,20 +293,20 @@ function CashbookContent() {
               <label className="block text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-2.5">End Date</label>
               <div className="relative">
                 <Calendar className="w-4 h-4 text-[#4a5568] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={filters.endDate}
-                  onChange={(e) => setFilters({...filters, endDate: e.target.value})}
-                  className="w-full bg-[#0b0f1a] text-white text-sm font-medium pl-10 pr-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] outline-none transition-all" 
+                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                  className="w-full bg-[#0b0f1a] text-white text-sm font-medium pl-10 pr-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] outline-none transition-all"
                 />
               </div>
             </div>
 
             <div>
               <label className="block text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-2.5">Payment Method</label>
-              <select 
+              <select
                 value={filters.method}
-                onChange={(e) => setFilters({...filters, method: e.target.value})}
+                onChange={(e) => setFilters({ ...filters, method: e.target.value })}
                 className="w-full bg-[#0b0f1a] text-white text-sm font-medium px-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] outline-none appearance-none transition-all"
               >
                 <option value="all">All Methods</option>
@@ -319,9 +316,9 @@ function CashbookContent() {
 
             <div>
               <label className="block text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-2.5">Transaction Type</label>
-              <select 
+              <select
                 value={filters.label}
-                onChange={(e) => setFilters({...filters, label: e.target.value})}
+                onChange={(e) => setFilters({ ...filters, label: e.target.value })}
                 className="w-full bg-[#0b0f1a] text-white text-sm font-medium px-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] focus:border-[#c9a84c] outline-none appearance-none transition-all"
               >
                 <option value="all">All Types</option>

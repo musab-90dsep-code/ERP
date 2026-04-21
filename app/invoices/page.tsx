@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Plus, Trash2, FileText, ShoppingCart, ArrowLeftRight, Calculator, CreditCard, PenTool, CheckCircle, PackageSearch, Banknote, Building2, Wallet, Eye, X, Printer } from 'lucide-react';
 
-type InvoiceType = 'buy' | 'sell' | 'return';
+type InvoiceType = 'buy' | 'sell' | 'return' | 'exchange';
 type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'bank_to_bank_transfer' | 'cheque';
 type ChequeType = 'own' | 'customer';
 
@@ -53,6 +53,9 @@ function InvoicesContent() {
       payment_method: 'cash' as PaymentMethod,
       cheque_type: 'own' as ChequeType, // For Paid/Buy invoices
       payment_details: {} as any,
+
+      // Exchange specific
+      returnedItems: [] as InvoiceItem[],
 
       // Signatures
       authorized_signature: '',
@@ -110,7 +113,7 @@ function InvoicesContent() {
       const tab = searchParams.get('tab');
       const fromOrder = searchParams.get('from_order');
 
-      if (tab === 'buy' || tab === 'sell' || tab === 'return') {
+      if (tab === 'buy' || tab === 'sell' || tab === 'return' || tab === 'exchange') {
          setActiveTab(tab as InvoiceType);
       }
 
@@ -142,7 +145,7 @@ function InvoicesContent() {
 
    const fetchData = async () => {
       try {
-         const targetType = activeTab === 'buy' ? 'supplier' : 'customer';
+         const targetType = (activeTab === 'buy') ? 'supplier' : 'customer';
          const [pData, cData, eData, accData] = await Promise.all([
             api.getProducts({}),
             api.getContacts({ type: targetType }),
@@ -164,6 +167,7 @@ function InvoicesContent() {
    };
 
    const handleAddItem = () => setForm({ ...form, items: [...form.items, { product_id: '', quantity: 1, price: '' as any }] });
+   const handleAddReturnedItem = () => setForm({ ...form, returnedItems: [...form.returnedItems, { product_id: '', quantity: 1, price: '' as any }] });
 
    const handleRemoveItem = (index: number) => {
       const newItems = [...form.items];
@@ -171,17 +175,24 @@ function InvoicesContent() {
       setForm({ ...form, items: newItems });
    };
 
-   const handleItemChange = (index: number, field: string, value: any) => {
-      const newItems = [...form.items] as any;
+   const handleRemoveReturnedItem = (index: number) => {
+      const newItems = [...form.returnedItems];
+      newItems.splice(index, 1);
+      setForm({ ...form, returnedItems: newItems });
+   };
+
+   const handleItemChange = (index: number, field: string, value: any, isReturned: boolean = false) => {
+      const listName = isReturned ? 'returnedItems' : 'items';
+      const newItems = [...(form as any)[listName]] as any;
       let finalValue = value;
 
-      // Auto-limit quantity for 'sell' based on available stock
-      if (field === 'quantity' && activeTab === 'sell') {
+      // Auto-limit quantity for 'sell' (and exchange sales) based on available stock
+      if (field === 'quantity' && (activeTab === 'sell' || (activeTab === 'exchange' && !isReturned))) {
          const prod = products.find(p => p.id === newItems[index].product_id);
          if (prod && prod.stock_quantity !== undefined) {
             const available = Number(prod.stock_quantity);
             if (Number(finalValue) > available) {
-               finalValue = available; // Force cap to available stock
+               finalValue = available;
             }
          }
       }
@@ -194,8 +205,7 @@ function InvoicesContent() {
             newItems[index].price = Number(prod.price || 0);
             newItems[index].selected_head = '';
 
-            // Adjust quantity immediately if the new product has lower stock
-            if (activeTab === 'sell' && prod.stock_quantity !== undefined) {
+            if ((activeTab === 'sell' || (activeTab === 'exchange' && !isReturned)) && prod.stock_quantity !== undefined) {
                const available = Number(prod.stock_quantity);
                if (newItems[index].quantity > available) {
                   newItems[index].quantity = Math.max(0, available);
@@ -203,16 +213,20 @@ function InvoicesContent() {
             }
          }
       }
-      setForm({ ...form, items: newItems });
+      setForm({ ...form, [listName]: newItems });
    };
 
-   const rawSubtotal = form.items.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price)), 0);
-   const subtotal = Math.round(rawSubtotal * 100) / 100;
+   const saleSubtotal = form.items.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price)), 0);
+   const returnSubtotal = form.returnedItems.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price)), 0);
+
+   const subtotal = Math.round((saleSubtotal - returnSubtotal) * 100) / 100;
+
    const rawDiscount = form.discount_type === 'percentage'
-      ? (subtotal * (Number(form.discount) / 100))
+      ? (Math.abs(subtotal) * (Number(form.discount) / 100))
       : Number(form.discount);
    const actualDiscount = Math.round(rawDiscount * 100) / 100;
-   const total = Math.max(0, Math.round((subtotal - actualDiscount) * 100) / 100);
+
+   const total = subtotal > 0 ? Math.max(0, Math.round((subtotal - actualDiscount) * 100) / 100) : Math.round((subtotal + actualDiscount) * 100) / 100;
 
    // User can now enter any amount
    const handlePaymentAmountChange = (val: string) => {
@@ -229,7 +243,7 @@ function InvoicesContent() {
 
    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!form.contact_id || form.items.some(i => !i.product_id)) {
+      if (!form.contact_id || (form.items.length === 0 && form.returnedItems.length === 0)) {
          alert('Please fill out all required fields and select products.');
          return;
       }
@@ -237,6 +251,25 @@ function InvoicesContent() {
 
       try {
          // 1. Create Invoice
+         const combinedItems = [
+            ...form.items.map(item => ({
+               product: item.product_id,
+               quantity: Number(item.quantity),
+               price: Number(item.price),
+               subtotal: Number(item.quantity) * Number(item.price),
+               selected_head: item.selected_head || null,
+               is_return: false
+            })),
+            ...form.returnedItems.map(item => ({
+               product: item.product_id,
+               quantity: Number(item.quantity),
+               price: Number(item.price),
+               subtotal: Number(item.quantity) * Number(item.price),
+               selected_head: item.selected_head || null,
+               is_return: true
+            }))
+         ];
+
          const invPayload = {
             type: activeTab,
             contact: form.contact_id,
@@ -249,21 +282,15 @@ function InvoicesContent() {
             payment_status: due <= 0 ? 'paid' : (form.payment_amount > 0 ? 'partial' : 'unpaid'),
             authorized_signature: form.authorized_signature,
             received_by: form.received_by,
-            items: form.items.map(item => ({
-               product: item.product_id,
-               quantity: Number(item.quantity),
-               price: Number(item.price),
-               subtotal: Number(item.quantity) * Number(item.price),
-               selected_head: item.selected_head || null
-            }))
+            items: combinedItems
          };
 
          const invData = await api.createInvoice(invPayload);
 
          // 3. Create Payment entry if applicable
          if (Number(form.payment_amount) > 0) {
-            // buy = payment goes out, sell = payment comes in, return = payment goes out (refund)
-            const paymentType = activeTab === 'sell' ? 'in' : 'out';
+            // buy = payment goes out, sell = payment comes in, return = payment goes out (refund), exchange = in if total > 0, out if total < 0
+            const paymentType = (activeTab === 'sell' || (activeTab === 'exchange' && total > 0)) ? 'in' : 'out';
 
             let finalPaymentDetails = { ...form.payment_details };
             if (form.payment_method === 'cheque' && activeTab === 'buy') {
@@ -297,28 +324,7 @@ function InvoicesContent() {
             }
          }
 
-         // 4. Adjust Product Inventory Stock
-         for (const item of form.items) {
-            const p = products.find(prod => prod.id === item.product_id);
-            if (p && p.stock_quantity !== undefined) {
-               let newStock = Number(p.stock_quantity);
-               if (activeTab === 'buy') newStock += Number(item.quantity);
-               else if (activeTab === 'sell') newStock -= Number(item.quantity);
-               else if (activeTab === 'return') newStock += Number(item.quantity);
-
-               try {
-                  await api.updateProduct?.(p.id, { stock_quantity: newStock }).catch(async () => {
-                     // Fallback to fetch directly since api doesn't expose updateProduct in api.ts
-                     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ model: 'product', action: 'update', id: p.id, data: { stock_quantity: newStock } })
-                     });
-                  });
-               } catch (e) { }
-            }
-         }
-
+         // (Inventory Stock adjustment is now handled automatically by the backend serializer)
 
          setShowBuilder(false);
          resetForm();
@@ -338,7 +344,8 @@ function InvoicesContent() {
       setHasDiscount(false);
       setForm({
          contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: 1, price: '' as any }] as InvoiceItem[], discount: '' as any, discount_type: 'amount', discount_method: '',
-         payment_amount: '' as any, payment_method: 'cash', cheque_type: 'own', payment_details: {}, authorized_signature: '', received_by: ''
+         payment_amount: '' as any, payment_method: 'cash', cheque_type: 'own', payment_details: {}, authorized_signature: '', received_by: '',
+         returnedItems: []
       });
    };
 
@@ -514,8 +521,8 @@ function InvoicesContent() {
       const pType = String(p.type || p.category || '').toLowerCase();
       if (activeTab === 'buy') {
          return pType.includes('raw'); // Only allow raw materials in Buy
-      } else if (activeTab === 'sell' || activeTab === 'return') {
-         return pType.includes('finish'); // Only allow finished goods in Sell & Return
+      } else if (activeTab === 'sell' || activeTab === 'return' || activeTab === 'exchange') {
+         return pType.includes('finish'); // Only allow finished goods in Sell, Return & Exchange
       }
       return true; // Fallback filter just in case 'type' is missing/different
    });
@@ -539,12 +546,12 @@ function InvoicesContent() {
                   <FileText style={{ width: 14, height: 14 }} /> Comprehensive Invoicing Engine
                </p>
                <h1 style={{ fontSize: 24, fontWeight: 900, color: N.goldBr, margin: '0 0 6px' }}>
-                  {activeTab === 'buy' ? 'Purchases (Buy)' : activeTab === 'sell' ? 'Sales (Sell)' : 'Sales Returns'}
+                  {activeTab === 'buy' ? 'Purchases (Buy)' : activeTab === 'sell' ? 'Sales (Sell)' : 'Sales Returns (Exchange)'}
                </h1>
                <p style={{ color: N.textSub, fontSize: 13, margin: 0 }}>
                   {activeTab === 'buy' ? 'Record vendor purchases, process upfront payments.' :
                      activeTab === 'sell' ? 'Generate customer invoices and track revenue.' :
-                        'Process returns and log refunds.'}
+                        'Process item exchange: items returned vs items issued.'}
                </p>
             </div>
 
@@ -556,10 +563,32 @@ function InvoicesContent() {
                      color: '#0a0900', fontWeight: 800, fontSize: 13, boxShadow: '0 4px 14px rgba(201,168,76,.35)'
                   }}>
                   <Plus style={{ width: 16, height: 16 }} />
-                  Create {activeTab === 'buy' ? 'Purchase' : activeTab === 'sell' ? 'Sale' : 'Return'}
+                  Create {activeTab === 'buy' ? 'Purchase' : activeTab === 'sell' ? 'Sale' : 'Return/Exchange'}
                </button>
             )}
          </div>
+
+         {!showBuilder && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20, overflowX: 'auto', paddingBottom: 10 }}>
+               {[
+                  { id: 'buy', name: 'Purchase (Buy)', icon: ShoppingCart },
+                  { id: 'sell', name: 'Sales (Sell)', icon: FileText },
+                  { id: 'exchange', name: 'Sales Returns', icon: ArrowLeftRight },
+               ].map(t => (
+                  <button key={t.id} onClick={() => {
+                     setActiveTab(t.id as any);
+                     router.push(`/invoices?tab=${t.id}`);
+                  }} style={{
+                     display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, border: '1px solid ' + (activeTab === t.id ? N.gold : N.borderSub),
+                     background: activeTab === t.id ? 'rgba(201,168,76,.15)' : N.card, color: activeTab === t.id ? N.goldBr : N.textSub,
+                     fontSize: 13, fontWeight: 800, cursor: 'pointer', transition: 'all .2s', whiteSpace: 'nowrap'
+                  }}>
+                     <t.icon style={{ width: 14, height: 14 }} />
+                     {t.name}
+                  </button>
+               ))}
+            </div>
+         )}
 
          {!showBuilder ? (
             <div style={{ background: N.card, border: '1px solid ' + N.borderSub, borderRadius: 14, overflow: 'hidden' }}>
@@ -632,7 +661,7 @@ function InvoicesContent() {
                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 800, color: N.goldBr, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                      <Calculator style={{ width: 18, height: 18 }} />
-                     New {activeTab === 'buy' ? 'Purchase Invoice' : activeTab === 'sell' ? 'Sales Invoice' : 'Return Invoice'}
+                     New {activeTab === 'buy' ? 'Purchase Invoice' : activeTab === 'sell' ? 'Sales Invoice' : 'Sales Return / Exchange Memo'}
                   </h2>
                   <button onClick={() => setShowBuilder(false)}
                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.05)', color: 'rgba(255,255,255,.6)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
@@ -661,7 +690,9 @@ function InvoicesContent() {
 
                   <div style={{ marginBottom: 24 }}>
                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ fontSize: 14, fontWeight: 800, color: N.gold, margin: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>Items</h3>
+                        <h3 style={{ fontSize: 14, fontWeight: 800, color: N.green, margin: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                           {activeTab === 'exchange' ? '1. New Items Given (Sale)' : 'Items'}
+                        </h3>
                      </div>
 
                      <div style={{ background: N.card2, border: '1px solid ' + N.borderSub, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
@@ -683,7 +714,6 @@ function InvoicesContent() {
                                     return (
                                        <tr key={index} style={{ borderBottom: index < form.items.length - 1 ? '1px solid ' + N.borderSub : 'none' }}>
                                           <td style={{ padding: '10px 14px' }}>
-                                             {/* Updated product mapping to availableProducts */}
                                              <select required value={item.product_id} onChange={e => handleItemChange(index, 'product_id', e.target.value)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
                                                 <option value="" disabled>Select Product</option>
                                                 {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -709,8 +739,8 @@ function InvoicesContent() {
                                              {(Number(item.quantity) * Number(item.price)).toFixed(2)}
                                           </td>
                                           <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                                             <button type="button" onClick={() => handleRemoveItem(index)} disabled={form.items.length === 1}
-                                                style={{ padding: '6px', borderRadius: 6, border: 'none', background: form.items.length === 1 ? 'transparent' : 'rgba(248,113,113,.1)', color: form.items.length === 1 ? N.textMut : N.red, cursor: form.items.length === 1 ? 'not-allowed' : 'pointer' }}>
+                                             <button type="button" onClick={() => handleRemoveItem(index)} disabled={activeTab !== 'exchange' && form.items.length === 1}
+                                                style={{ padding: '6px', borderRadius: 6, border: 'none', background: (activeTab !== 'exchange' && form.items.length === 1) ? 'transparent' : 'rgba(248,113,113,.1)', color: (activeTab !== 'exchange' && form.items.length === 1) ? N.textMut : N.red, cursor: (activeTab !== 'exchange' && form.items.length === 1) ? 'not-allowed' : 'pointer' }}>
                                                 <Trash2 style={{ width: 14, height: 14 }} />
                                              </button>
                                           </td>
@@ -728,11 +758,87 @@ function InvoicesContent() {
                         </div>
                      </div>
 
+                     {activeTab === 'exchange' && (
+                        <div style={{ marginBottom: 24, marginTop: 32 }}>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                              <h3 style={{ fontSize: 14, fontWeight: 800, color: N.red, margin: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>2. Items Received Back (Return)</h3>
+                           </div>
+
+                           <div style={{ background: N.card2, border: '1px solid ' + N.borderSub, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                              <div style={{ overflowX: 'auto' }}>
+                                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+                                    <thead>
+                                       <tr style={{ background: 'rgba(248,113,113,.08)' }}>
+                                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Product</th>
+                                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Variant/Head</th>
+                                          <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 100, borderBottom: '1px solid ' + N.borderSub }}>Quantity</th>
+                                          <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Unit Price (৳)</th>
+                                          <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 120, borderBottom: '1px solid ' + N.borderSub }}>Credit (৳)</th>
+                                          <th style={{ padding: '10px 14px', width: 50, borderBottom: '1px solid ' + N.borderSub }}></th>
+                                       </tr>
+                                    </thead>
+                                    <tbody>
+                                       {form.returnedItems.map((item, index) => {
+                                          const selProd = products.find(p => p.id === item.product_id);
+                                          return (
+                                             <tr key={index} style={{ borderBottom: index < form.returnedItems.length - 1 ? '1px solid ' + N.borderSub : 'none' }}>
+                                                <td style={{ padding: '10px 14px' }}>
+                                                   <select required value={item.product_id} onChange={e => handleItemChange(index, 'product_id', e.target.value, true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
+                                                      <option value="" disabled>Select Product</option>
+                                                      {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                                   </select>
+                                                </td>
+                                                <td style={{ padding: '10px 14px' }}>
+                                                   {(selProd?.product_heads && Array.isArray(selProd.product_heads) && selProd.product_heads.length > 0) ? (
+                                                      <select value={item.selected_head || ''} onChange={e => handleItemChange(index, 'selected_head', e.target.value, true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
+                                                         <option value="">No Variant</option>
+                                                         {selProd.product_heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
+                                                      </select>
+                                                   ) : (
+                                                      <span style={{ fontSize: 11, color: N.textMut, paddingLeft: 8 }}>N/A</span>
+                                                   )}
+                                                </td>
+                                                <td style={{ padding: '10px 14px' }}>
+                                                   <input required type="number" min="1" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value), true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
+                                                </td>
+                                                <td style={{ padding: '10px 14px' }}>
+                                                   <input required type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value === '' ? '' : Number(e.target.value), true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
+                                                </td>
+                                                <td style={{ padding: '10px 14px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: N.text }}>
+                                                   {(Number(item.quantity) * Number(item.price)).toFixed(2)}
+                                                </td>
+                                                <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                                                   <button type="button" onClick={() => handleRemoveReturnedItem(index)}
+                                                      style={{ padding: '6px', borderRadius: 6, border: 'none', background: 'rgba(248,113,113,.1)', color: N.red, cursor: 'pointer' }}>
+                                                      <Trash2 style={{ width: 14, height: 14 }} />
+                                                   </button>
+                                                </td>
+                                             </tr>
+                                          );
+                                       })}
+                                       {form.returnedItems.length === 0 && (
+                                          <tr>
+                                             <td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: N.textMut, fontSize: 12 }}>No items added to return list.</td>
+                                          </tr>
+                                       )}
+                                    </tbody>
+                                 </table>
+                              </div>
+                              <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,.01)' }}>
+                                 <button type="button" onClick={handleAddReturnedItem}
+                                    style={{ padding: '7px 14px', borderRadius: 8, border: '1px dashed ' + N.red, background: 'rgba(248,113,113,.05)', color: N.red, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <Plus style={{ width: 14, height: 14 }} /> Add Return Item
+                                 </button>
+                              </div>
+                           </div>
+                        </div>
+                     )}
+
                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         <div style={{ width: '100%', maxWidth: 360, background: 'rgba(201,168,76,.04)', border: '1px solid ' + N.border, borderRadius: 12, padding: 16 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 13 }}>
-                              <span style={{ color: N.textSub }}>Subtotal:</span>
-                              <span style={{ fontWeight: 800, color: N.text, fontFamily: 'monospace' }}>৳ {subtotal.toFixed(2)}</span>
+                              <span style={{ color: N.textSub }}>{activeTab === 'exchange' ? 'Net Subtotal (New - Return):' : 'Subtotal:'}</span>
+                              <span style={{ fontWeight: 800, color: subtotal >= 0 ? N.text : N.red, fontFamily: 'monospace' }}>৳ {subtotal.toFixed(2)}</span>
                            </div>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                               <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: N.gold, fontSize: 13, fontWeight: 700 }}>
@@ -827,7 +933,7 @@ function InvoicesContent() {
                            <button type="submit" disabled={submitting}
                               style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')', color: '#0a0900', fontWeight: 900, fontSize: 15, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, boxShadow: '0 4px 14px rgba(201,168,76,.35)', opacity: submitting ? .6 : 1 }}>
                               <CheckCircle style={{ width: 20, height: 20 }} />
-                              {submitting ? 'Processing...' : (activeTab === 'buy' ? 'Confirm Purchase' : activeTab === 'sell' ? 'Confirm Sale' : 'Process Return')}
+                              {submitting ? 'Processing...' : (activeTab === 'buy' ? 'Confirm Purchase' : activeTab === 'sell' ? 'Confirm Sale' : 'Complete Return/Exchange')}
                            </button>
                         </div>
                      </div>
@@ -879,8 +985,8 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
                .no-print { display: none !important; }
             }
          `}</style>
-         
-         <div className="invoice-memo-container" style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 20, width: '100%', maxWidth: 840, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.8)', overflow:'hidden' }}>
+
+         <div className="invoice-memo-container" style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 20, width: '100%', maxWidth: 840, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.8)', overflow: 'hidden' }}>
             <div className="no-print" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, rgba(201,168,76,.15), rgba(201,168,76,.05))', borderBottom: '1px solid ' + N.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                <div>
                   <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: N.gold }}>
@@ -900,9 +1006,9 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
                <div style={{ textAlign: 'center', marginBottom: 40, borderBottom: '3px solid black', paddingBottom: 20 }}>
                   <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, letterSpacing: '4px', textTransform: 'uppercase' }}>MEMORANDUM</h1>
                   <p style={{ margin: '8px 0', fontSize: 14, fontWeight: 700 }}>{invoice.type === 'sell' ? 'Sales Invoice' : invoice.type === 'buy' ? 'Purchase Record' : 'Return Credit Note'}</p>
-                  <div style={{ display:'flex', justifyContent:'center', gap:20, marginTop:10, fontSize:12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 10, fontSize: 12 }}>
                      <span><strong>ID:</strong> #{invoice.id.substring(0, 12).toUpperCase()}</span>
-                     <span><strong>DATE:</strong> {new Date(invoice.date).toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' })}</span>
+                     <span><strong>DATE:</strong> {new Date(invoice.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                   </div>
                </div>
 
@@ -989,7 +1095,7 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
             </div>
 
             <div className="no-print" style={{ padding: '16px 24px', background: 'rgba(255,255,255,.02)', borderTop: '1px solid ' + N.borderSub, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-               <button onClick={handlePrintInvoice} style={{ display:'flex', alignItems:'center', gap:8, padding: '10px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')', color: 'black', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+               <button onClick={handlePrintInvoice} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')', color: 'black', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
                   <Printer size={16} /> Print Memo
                </button>
                <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid ' + N.borderSub, background: 'transparent', color: N.text, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Close</button>

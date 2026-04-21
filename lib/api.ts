@@ -20,12 +20,12 @@ async function unifiedApiCall<T = any>(
   data?: Record<string, any> | FormData
 ): Promise<T> {
   const url = `${BASE_URL}/api/`; // Trailing slash যোগ করা হয়েছে
-  
+
   // NOTE: If using FormData, we'd normally parse it or upload directly. 
   // For now, we'll convert simple FormData to JSON for the backend, or rely on cloudinary for image uploads prior to calling this.
   let jsonPayload = data;
   if (data instanceof FormData) {
-      jsonPayload = Object.fromEntries(data.entries());
+    jsonPayload = Object.fromEntries(data.entries());
   }
 
   const payload = {
@@ -48,7 +48,7 @@ async function unifiedApiCall<T = any>(
     try {
       const body = await res.json();
       errMsg = body?.error || body?.detail || body?.message || JSON.stringify(body) || errMsg;
-    } catch (_) {}
+    } catch (_) { }
     throw new Error(errMsg);
   }
 

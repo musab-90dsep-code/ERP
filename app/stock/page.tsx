@@ -141,7 +141,7 @@ function StockContent() {
       p.stock_quantity,
       p.unit
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," 
+    const csvContent = "data:text/csv;charset=utf-8,"
       + headers.join(",") + "\n"
       + rows.map(e => e.join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -581,7 +581,7 @@ function StockContent() {
                   </tr>
                 )}
                 {filteredProducts.map(product => (
-                  <tr key={product.id} 
+                  <tr key={product.id}
                     onClick={() => setViewingProduct(product)}
                     className="hover:bg-[rgba(201,168,76,0.03)] transition-colors group cursor-pointer"
                   >
@@ -640,7 +640,7 @@ function StockContent() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map(product => (
-            <div key={product.id} 
+            <div key={product.id}
               onClick={() => setViewingProduct(product)}
               className="bg-[#131929] border border-[rgba(255,255,255,0.04)] hover:border-[rgba(201,168,76,0.3)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden flex flex-col group transition-all duration-300 cursor-pointer"
             >
@@ -940,7 +940,7 @@ function StockContent() {
                         </div>
                       ) : (
                         <div className="flex justify-center items-center py-6">
-                           <span className="text-xs font-bold text-[#4a5568] uppercase tracking-widest">No Variants Available</span>
+                          <span className="text-xs font-bold text-[#4a5568] uppercase tracking-widest">No Variants Available</span>
                         </div>
                       )}
                     </>

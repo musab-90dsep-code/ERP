@@ -31,17 +31,17 @@ function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initTab = (searchParams.get('tab') as 'issued' | 'received') || 'issued';
-  
+
   const [activeTab, setActiveTab] = useState<'issued' | 'received'>(initTab);
   const [showBuilder, setShowBuilder] = useState(false);
-  
+
   const [processors, setProcessors] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [internalAccounts, setInternalAccounts] = useState<any[]>([]);
   const [issuedRecords, setIssuedRecords] = useState<any[]>([]);
-  
+
   // Processor Balances State
   const [showBalancesModal, setShowBalancesModal] = useState(false);
   const [processorBalances, setProcessorBalances] = useState<any[]>([]);
@@ -126,7 +126,7 @@ function ProcessingContent() {
   };
 
   const addItem = () => setItems([...items, { product_id: '', quantity: '', process_type: '', selected_head: '' }]);
-  
+
   const removeItem = (index: number) => {
     if (items.length === 1) return;
     setItems(items.filter((_, i) => i !== index));
@@ -135,7 +135,7 @@ function ProcessingContent() {
   const updateItem = (index: number, field: keyof ProductItem, value: string) => {
     const newItems = [...items];
     newItems[index][field] = value;
-    if (field === 'product_id') newItems[index].selected_head = ''; 
+    if (field === 'product_id') newItems[index].selected_head = '';
     setItems(newItems);
   };
 
@@ -159,14 +159,14 @@ function ProcessingContent() {
       alert('Please add at least one valid product with a quantity.');
       return;
     }
-    
+
     for (const item of validItems) {
-       const prod = getProduct(item.product_id);
-       const heads = (prod?.product_heads || []).filter((h: string) => h.trim());
-       if (heads.length > 0 && !item.selected_head) {
-          alert(`Please select a Variant/Head for ${prod.name}`);
-          return;
-       }
+      const prod = getProduct(item.product_id);
+      const heads = (prod?.product_heads || []).filter((h: string) => h.trim());
+      if (heads.length > 0 && !item.selected_head) {
+        alert(`Please select a Variant/Head for ${prod.name}`);
+        return;
+      }
     }
 
     if (!processorId || !authorizedSignature || !receivedBy) {
@@ -176,16 +176,16 @@ function ProcessingContent() {
 
     if (activeTab === 'issued' && hasPayment && Number(paymentAmount) > 0) {
       if (['bikash', 'nagad', 'rocket', 'upay', 'bank_to_bank_transfer'].includes(paymentMethod)) {
-         if (!paymentDetails.internal_account_id) {
-            alert('Please select an internal account for the transaction.');
-            return;
-         }
+        if (!paymentDetails.internal_account_id) {
+          alert('Please select an internal account for the transaction.');
+          return;
+        }
       }
       if (['bank_transfer', 'bank_to_bank_transfer'].includes(paymentMethod)) {
-         if (!paymentDetails.bank_name || !paymentDetails.account_number) {
-            alert("Please select the processor's bank account.");
-            return;
-         }
+        if (!paymentDetails.bank_name || !paymentDetails.account_number) {
+          alert("Please select the processor's bank account.");
+          return;
+        }
       }
     }
 
@@ -223,28 +223,28 @@ function ProcessingContent() {
       }
 
       if (activeTab === 'issued' && hasPayment && Number(paymentAmount) > 0) {
-         try {
-           const finalPaymentDetails = { ...paymentDetails };
-           const paymentPayload = {
-             contact: processorId,
-             type: 'out',
-             amount: Number(paymentAmount),
-             method: paymentMethod,
-             date: date,
-             payment_method_details: finalPaymentDetails,
-             authorized_signature: authorizedSignature,
-             received_by: receivedBy,
-             reference: memoNo,
-             note: `Advance for Processing Memo: ${memoNo}`
-           };
-           await api.createPayment(paymentPayload);
+        try {
+          const finalPaymentDetails = { ...paymentDetails };
+          const paymentPayload = {
+            contact: processorId,
+            type: 'out',
+            amount: Number(paymentAmount),
+            method: paymentMethod,
+            date: date,
+            payment_method_details: finalPaymentDetails,
+            authorized_signature: authorizedSignature,
+            received_by: receivedBy,
+            reference: memoNo,
+            note: `Advance for Processing Memo: ${memoNo}`
+          };
+          await api.createPayment(paymentPayload);
 
-           if (paymentMethod === 'cheque') {
-              await api.createCheck({ type: 'issued', check_number: finalPaymentDetails.cheque_number || 'UNKNOWN', bank_name: finalPaymentDetails.bank_name || 'UNKNOWN', amount: Number(paymentAmount), issue_date: date, cash_date: finalPaymentDetails.cheque_date || date, status: 'pending', partner_id: processorId });
-           }
-         } catch (payEx) {
-           console.error('Payment Error:', payEx);
-         }
+          if (paymentMethod === 'cheque') {
+            await api.createCheck({ type: 'issued', check_number: finalPaymentDetails.cheque_number || 'UNKNOWN', bank_name: finalPaymentDetails.bank_name || 'UNKNOWN', amount: Number(paymentAmount), issue_date: date, cash_date: finalPaymentDetails.cheque_date || date, status: 'pending', partner_id: processorId });
+          }
+        } catch (payEx) {
+          console.error('Payment Error:', payEx);
+        }
       }
 
       setShowBuilder(false);
@@ -295,138 +295,138 @@ function ProcessingContent() {
   const labelClass = "block text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-1.5 flex items-center gap-2";
 
   const availableProducts = products.filter(pr => {
-     if (activeTab === 'issued') {
-        return pr.category === 'raw-materials';
-     }
-     if (activeTab === 'received') {
-        if (processorId) return issuedRecords.some(r => r.product === pr.id && r.processor === processorId);
-        return issuedRecords.some(r => r.product === pr.id);
-     }
-     return true;
+    if (activeTab === 'issued') {
+      return pr.category === 'raw-materials';
+    }
+    if (activeTab === 'received') {
+      if (processorId) return issuedRecords.some(r => r.product === pr.id && r.processor === processorId);
+      return issuedRecords.some(r => r.product === pr.id);
+    }
+    return true;
   });
 
   const renderPaymentDetails = () => {
-     if (['bikash', 'nagad', 'rocket', 'upay'].includes(paymentMethod)) {
-        return (
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
-              <div className="sm:col-span-2">
-                 <label className={labelClass}>Paying From (Your Account)</label>
-                 <select required value={paymentDetails.internal_account_id || ''} onChange={e => setPaymentDetails({ ...paymentDetails, internal_account_id: e.target.value })} className={inputClass}>
-                    <option value="" disabled>Select your {paymentMethod} account</option>
-                    {internalAccounts.filter(acc => acc.account_type === 'wallet' && acc.provider_name.toLowerCase() === paymentMethod.toLowerCase()).map(acc => (
-                       <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number} {acc.account_name ? `(${acc.account_name})` : ''}</option>
-                    ))}
-                 </select>
-              </div>
-              <div>
-                 <label className={labelClass}>Processor's Receive Number</label>
-                 <input required placeholder="+8801..." type="text" value={paymentDetails.number || ''} onChange={e => setPaymentDetails({ ...paymentDetails, number: e.target.value })} className={inputClass} />
-              </div>
-              <div>
-                 <label className={labelClass}>Transaction ID</label>
-                 <input required placeholder="TRX..." type="text" value={paymentDetails.transaction_id || ''} onChange={e => setPaymentDetails({ ...paymentDetails, transaction_id: e.target.value })} className={`${inputClass} font-mono uppercase`} />
-              </div>
-           </div>
-        );
-     }
+    if (['bikash', 'nagad', 'rocket', 'upay'].includes(paymentMethod)) {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Paying From (Your Account)</label>
+            <select required value={paymentDetails.internal_account_id || ''} onChange={e => setPaymentDetails({ ...paymentDetails, internal_account_id: e.target.value })} className={inputClass}>
+              <option value="" disabled>Select your {paymentMethod} account</option>
+              {internalAccounts.filter(acc => acc.account_type === 'wallet' && acc.provider_name.toLowerCase() === paymentMethod.toLowerCase()).map(acc => (
+                <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number} {acc.account_name ? `(${acc.account_name})` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Processor's Receive Number</label>
+            <input required placeholder="+8801..." type="text" value={paymentDetails.number || ''} onChange={e => setPaymentDetails({ ...paymentDetails, number: e.target.value })} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Transaction ID</label>
+            <input required placeholder="TRX..." type="text" value={paymentDetails.transaction_id || ''} onChange={e => setPaymentDetails({ ...paymentDetails, transaction_id: e.target.value })} className={`${inputClass} font-mono uppercase`} />
+          </div>
+        </div>
+      );
+    }
 
-     if (paymentMethod === 'bank_to_bank_transfer') {
-        const selectedContact = processors.find(c => c.id === processorId);
-        const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
+    if (paymentMethod === 'bank_to_bank_transfer') {
+      const selectedContact = processors.find(c => c.id === processorId);
+      const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
 
-        return (
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
-              <div className="sm:col-span-2 md:col-span-1">
-                 <label className={labelClass}>Your Bank Account</label>
-                 <select required value={paymentDetails.internal_account_id || ''} onChange={e => {
-                    setPaymentDetails({ ...paymentDetails, internal_account_id: e.target.value });
-                 }} className={inputClass}>
-                    <option value="" disabled>Select your Bank Account</option>
-                    {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
-                       <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
-                    ))}
-                 </select>
-              </div>
-              <div className="sm:col-span-2 md:col-span-1">
-                 <label className={labelClass}>Processor's Bank Account</label>
-                 <select required value={`${paymentDetails.bank_name || ''}|${paymentDetails.account_number || ''}`} onChange={e => {
-                    const val = e.target.value;
-                    const selectedBank = contactBanks.find((b: any) => `${b.bank_name}|${b.account_number}` === val);
-                    if (selectedBank) {
-                       setPaymentDetails({ ...paymentDetails, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch });
-                    }
-                 }} className={inputClass}>
-                    <option value="|" disabled>Select Partner Bank Account</option>
-                    {contactBanks.map((b: any, idx: number) => {
-                       if (!b.bank_name) return null;
-                       return <option key={idx} value={`${b.bank_name}|${b.account_number}`}>{b.bank_name} - {b.account_number}</option>
-                    })}
-                 </select>
-                 {contactBanks.length === 0 && <span className="text-[10px] text-red-400 font-bold mt-1 block">No banks added to this contact yet.</span>}
-              </div>
-              <div className="sm:col-span-2">
-                 <label className={labelClass}>Transfer Date and Time</label>
-                 <input required type="datetime-local" value={paymentDetails.datetime || ''} onChange={e => setPaymentDetails({ ...paymentDetails, datetime: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
-              </div>
-           </div>
-        );
-     }
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
+          <div className="sm:col-span-2 md:col-span-1">
+            <label className={labelClass}>Your Bank Account</label>
+            <select required value={paymentDetails.internal_account_id || ''} onChange={e => {
+              setPaymentDetails({ ...paymentDetails, internal_account_id: e.target.value });
+            }} className={inputClass}>
+              <option value="" disabled>Select your Bank Account</option>
+              {internalAccounts.filter(acc => acc.account_type === 'bank').map(acc => (
+                <option key={acc.id} value={acc.id}>{acc.provider_name} - {acc.account_number}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2 md:col-span-1">
+            <label className={labelClass}>Processor's Bank Account</label>
+            <select required value={`${paymentDetails.bank_name || ''}|${paymentDetails.account_number || ''}`} onChange={e => {
+              const val = e.target.value;
+              const selectedBank = contactBanks.find((b: any) => `${b.bank_name}|${b.account_number}` === val);
+              if (selectedBank) {
+                setPaymentDetails({ ...paymentDetails, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch });
+              }
+            }} className={inputClass}>
+              <option value="|" disabled>Select Partner Bank Account</option>
+              {contactBanks.map((b: any, idx: number) => {
+                if (!b.bank_name) return null;
+                return <option key={idx} value={`${b.bank_name}|${b.account_number}`}>{b.bank_name} - {b.account_number}</option>
+              })}
+            </select>
+            {contactBanks.length === 0 && <span className="text-[10px] text-red-400 font-bold mt-1 block">No banks added to this contact yet.</span>}
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Transfer Date and Time</label>
+            <input required type="datetime-local" value={paymentDetails.datetime || ''} onChange={e => setPaymentDetails({ ...paymentDetails, datetime: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
+          </div>
+        </div>
+      );
+    }
 
-     if (paymentMethod === 'bank_transfer') {
-        const selectedContact = processors.find(c => c.id === processorId);
-        const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
+    if (paymentMethod === 'bank_transfer') {
+      const selectedContact = processors.find(c => c.id === processorId);
+      const contactBanks = selectedContact && Array.isArray(selectedContact.bank_details) ? selectedContact.bank_details : (selectedContact && selectedContact.bank_details && Object.keys(selectedContact.bank_details).length > 0 ? [selectedContact.bank_details] : []);
 
-        return (
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
-              <div className="sm:col-span-2 md:col-span-1">
-                 <label className={labelClass}>Processor's Bank Account</label>
-                 <select required value={`${paymentDetails.bank_name || ''}|${paymentDetails.account_number || ''}`} onChange={e => {
-                    const val = e.target.value;
-                    const selectedBank = contactBanks.find((b: any) => `${b.bank_name}|${b.account_number}` === val);
-                    if (selectedBank) {
-                       setPaymentDetails({ ...paymentDetails, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch });
-                    }
-                 }} className={inputClass}>
-                    <option value="|" disabled>Select Processor's Bank Account</option>
-                    {contactBanks.map((b: any, idx: number) => {
-                       if (!b.bank_name) return null;
-                       return <option key={idx} value={`${b.bank_name}|${b.account_number}`}>{b.bank_name} - {b.account_number}</option>
-                    })}
-                 </select>
-                 {contactBanks.length === 0 && <span className="text-[10px] text-red-400 font-bold mt-1 block">No banks added to this processor yet.</span>}
-              </div>
-              <div className="sm:col-span-2 md:col-span-1">
-                 <label className={labelClass}>Transfer Date and Time</label>
-                 <input required type="datetime-local" value={paymentDetails.datetime || ''} onChange={e => setPaymentDetails({ ...paymentDetails, datetime: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
-              </div>
-           </div>
-        );
-     }
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
+          <div className="sm:col-span-2 md:col-span-1">
+            <label className={labelClass}>Processor's Bank Account</label>
+            <select required value={`${paymentDetails.bank_name || ''}|${paymentDetails.account_number || ''}`} onChange={e => {
+              const val = e.target.value;
+              const selectedBank = contactBanks.find((b: any) => `${b.bank_name}|${b.account_number}` === val);
+              if (selectedBank) {
+                setPaymentDetails({ ...paymentDetails, bank_name: selectedBank.bank_name, account_name: selectedBank.account_name, account_number: selectedBank.account_number, branch: selectedBank.branch });
+              }
+            }} className={inputClass}>
+              <option value="|" disabled>Select Processor's Bank Account</option>
+              {contactBanks.map((b: any, idx: number) => {
+                if (!b.bank_name) return null;
+                return <option key={idx} value={`${b.bank_name}|${b.account_number}`}>{b.bank_name} - {b.account_number}</option>
+              })}
+            </select>
+            {contactBanks.length === 0 && <span className="text-[10px] text-red-400 font-bold mt-1 block">No banks added to this processor yet.</span>}
+          </div>
+          <div className="sm:col-span-2 md:col-span-1">
+            <label className={labelClass}>Transfer Date and Time</label>
+            <input required type="datetime-local" value={paymentDetails.datetime || ''} onChange={e => setPaymentDetails({ ...paymentDetails, datetime: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
+          </div>
+        </div>
+      );
+    }
 
-     if (paymentMethod === 'cheque') {
-        return (
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
-              <div className="sm:col-span-2">
-                 <label className={labelClass}>Bank Name</label>
-                 <input required type="text" value={paymentDetails.bank_name || ''} onChange={e => setPaymentDetails({ ...paymentDetails, bank_name: e.target.value })} className={inputClass} />
-              </div>
-              <div>
-                 <label className={labelClass}>Cheque Number</label>
-                 <input required type="text" value={paymentDetails.cheque_number || ''} onChange={e => setPaymentDetails({ ...paymentDetails, cheque_number: e.target.value })} className={`${inputClass} font-mono`} />
-              </div>
-              <div>
-                 <label className={labelClass}>Cheque Date</label>
-                 <input required type="date" value={paymentDetails.cheque_date || ''} onChange={e => setPaymentDetails({ ...paymentDetails, cheque_date: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
-              </div>
-           </div>
-        );
-     }
-     return null;
+    if (paymentMethod === 'cheque') {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 bg-[#0b0f1a] rounded-xl border border-[rgba(255,255,255,0.05)]">
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Bank Name</label>
+            <input required type="text" value={paymentDetails.bank_name || ''} onChange={e => setPaymentDetails({ ...paymentDetails, bank_name: e.target.value })} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Cheque Number</label>
+            <input required type="text" value={paymentDetails.cheque_number || ''} onChange={e => setPaymentDetails({ ...paymentDetails, cheque_number: e.target.value })} className={`${inputClass} font-mono`} />
+          </div>
+          <div>
+            <label className={labelClass}>Cheque Date</label>
+            <input required type="date" value={paymentDetails.cheque_date || ''} onChange={e => setPaymentDetails({ ...paymentDetails, cheque_date: e.target.value })} className={`${inputClass} [color-scheme:dark]`} />
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
     <div className="pb-10 font-sans animate-in fade-in duration-300 max-w-[1400px] mx-auto px-2 sm:px-0">
-      
+
       {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 bg-[#131929] p-6 rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
         <div>
@@ -438,7 +438,7 @@ function ProcessingContent() {
             <Settings className="w-6 h-6 text-[#c9a84c]" /> Processing Sector
           </h1>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={openBalancesModal} className="flex-1 sm:flex-none items-center justify-center gap-2 px-5 py-2.5 bg-[#1a2235] border border-[rgba(255,255,255,0.05)] rounded-xl text-[#8a95a8] hover:text-white hover:border-[rgba(201,168,76,0.3)] hover:bg-[rgba(201,168,76,0.1)] transition-colors shadow-sm text-sm font-bold flex">
             <Layers className="w-4 h-4 text-[#c9a84c]" /> Balances
@@ -454,12 +454,12 @@ function ProcessingContent() {
       {/* ── TABS (Visible when builder is closed) ── */}
       {!showBuilder && (
         <div className="flex bg-[#131929] rounded-xl p-1.5 mb-6 border border-[rgba(255,255,255,0.04)] shadow-sm max-w-sm mx-auto sm:mx-0">
-           <button onClick={() => { setActiveTab('issued'); router.push('/processing?tab=issued'); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'issued' ? 'bg-[#1a2235] text-orange-400 shadow-sm border border-[rgba(251,146,60,0.2)]' : 'text-[#4a5568] hover:text-[#8a95a8]'}`}>
-              <Send className="w-4 h-4" /> Issued Logs
-           </button>
-           <button onClick={() => { setActiveTab('received'); router.push('/processing?tab=received'); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'received' ? 'bg-[#1a2235] text-emerald-400 shadow-sm border border-[rgba(52,211,153,0.2)]' : 'text-[#4a5568] hover:text-[#8a95a8]'}`}>
-              <Download className="w-4 h-4" /> Received Logs
-           </button>
+          <button onClick={() => { setActiveTab('issued'); router.push('/processing?tab=issued'); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'issued' ? 'bg-[#1a2235] text-orange-400 shadow-sm border border-[rgba(251,146,60,0.2)]' : 'text-[#4a5568] hover:text-[#8a95a8]'}`}>
+            <Send className="w-4 h-4" /> Issued Logs
+          </button>
+          <button onClick={() => { setActiveTab('received'); router.push('/processing?tab=received'); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'received' ? 'bg-[#1a2235] text-emerald-400 shadow-sm border border-[rgba(52,211,153,0.2)]' : 'text-[#4a5568] hover:text-[#8a95a8]'}`}>
+            <Download className="w-4 h-4" /> Received Logs
+          </button>
         </div>
       )}
 
@@ -476,12 +476,12 @@ function ProcessingContent() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-            
+
             {/* Core Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-[#1a2235] p-5 rounded-xl border border-[rgba(255,255,255,0.04)]">
               <div className="md:col-span-3 lg:col-span-1">
-                 <label className={labelClass}><FileText className="w-3 h-3 text-[#c9a84c]" /> Memo No</label>
-                 <input type="text" disabled value={memoNo} className={`${inputClass} !text-[#8a95a8] font-mono cursor-not-allowed`} />
+                <label className={labelClass}><FileText className="w-3 h-3 text-[#c9a84c]" /> Memo No</label>
+                <input type="text" disabled value={memoNo} className={`${inputClass} !text-[#8a95a8] font-mono cursor-not-allowed`} />
               </div>
               <div className="md:col-span-1 lg:col-span-1">
                 <label className={labelClass}><UserCheck className="w-3 h-3 text-[#c9a84c]" /> Processor *</label>
@@ -531,10 +531,10 @@ function ProcessingContent() {
                           </td>
                           <td className="px-3 py-2">
                             {heads.length > 0 ? (
-                               <select required value={item.selected_head || ''} onChange={e => updateItem(idx, 'selected_head', e.target.value)} className={`${inputClass} !py-1.5 !px-2 text-xs !bg-[rgba(201,168,76,0.1)] !text-[#c9a84c]`}>
-                                 <option value="" disabled>Select...</option>
-                                 {heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
-                               </select>
+                              <select required value={item.selected_head || ''} onChange={e => updateItem(idx, 'selected_head', e.target.value)} className={`${inputClass} !py-1.5 !px-2 text-xs !bg-[rgba(201,168,76,0.1)] !text-[#c9a84c]`}>
+                                <option value="" disabled>Select...</option>
+                                {heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
+                              </select>
                             ) : <span className="text-[#4a5568] text-xs font-bold pl-2">—</span>}
                           </td>
                           <td className="px-3 py-2 relative">
@@ -570,40 +570,40 @@ function ProcessingContent() {
               {/* Mobile View Cards */}
               <div className="md:hidden flex flex-col gap-3 mb-4">
                 {items.map((item, idx) => {
-                    const prod = getProduct(item.product_id);
-                    const heads = (prod?.product_heads || []).filter((h: string) => h.trim());
-                    return (
-                      <div key={idx} className="bg-[#0b0f1a] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 relative">
-                        {items.length > 1 && (
-                          <button type="button" onClick={() => removeItem(idx)} className="absolute top-2 right-2 text-[#4a5568] hover:text-red-400 p-1.5 bg-[#1a2235] rounded-md transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <div className="space-y-4">
-                          <div className={items.length > 1 ? "pr-8" : ""}>
-                            <label className="block text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1.5">Select Product</label>
-                            <select required value={item.product_id} onChange={e => updateItem(idx, 'product_id', e.target.value)} className={inputClass}>
-                              <option value="" disabled>-- Choose product --</option>
-                              {availableProducts.map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+                  const prod = getProduct(item.product_id);
+                  const heads = (prod?.product_heads || []).filter((h: string) => h.trim());
+                  return (
+                    <div key={idx} className="bg-[#0b0f1a] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 relative">
+                      {items.length > 1 && (
+                        <button type="button" onClick={() => removeItem(idx)} className="absolute top-2 right-2 text-[#4a5568] hover:text-red-400 p-1.5 bg-[#1a2235] rounded-md transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <div className="space-y-4">
+                        <div className={items.length > 1 ? "pr-8" : ""}>
+                          <label className="block text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1.5">Select Product</label>
+                          <select required value={item.product_id} onChange={e => updateItem(idx, 'product_id', e.target.value)} className={inputClass}>
+                            <option value="" disabled>-- Choose product --</option>
+                            {availableProducts.map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+                          </select>
+                        </div>
+                        {heads.length > 0 && (
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#c9a84c] uppercase tracking-widest mb-1.5">Variant / Head</label>
+                            <select required value={item.selected_head || ''} onChange={e => updateItem(idx, 'selected_head', e.target.value)} className={`${inputClass} !bg-[rgba(201,168,76,0.1)] !text-[#c9a84c] font-bold`}>
+                              <option value="" disabled>-- Select Variant --</option>
+                              {heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
                             </select>
                           </div>
-                          {heads.length > 0 && (
-                             <div>
-                               <label className="block text-[9px] font-bold text-[#c9a84c] uppercase tracking-widest mb-1.5">Variant / Head</label>
-                               <select required value={item.selected_head || ''} onChange={e => updateItem(idx, 'selected_head', e.target.value)} className={`${inputClass} !bg-[rgba(201,168,76,0.1)] !text-[#c9a84c] font-bold`}>
-                                 <option value="" disabled>-- Select Variant --</option>
-                                 {heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
-                               </select>
-                             </div>
-                          )}
-                          <div className={`grid ${activeTab === 'issued' ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
-                            <div>
-                              <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${activeTab === 'received' ? 'text-emerald-400' : 'text-[#8a95a8]'}`}>
-                                 {activeTab === 'received' ? 'Received Qty' : 'Issued Qty'} ({prod?.unit || 'U'})
-                              </label>
-                              <input required type="number" min="1" step="1" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} placeholder="0" className={`${inputClass} font-bold ${activeTab === 'received' ? 'border-emerald-500/50 text-white' : ''}`} />
-                            </div>
-                            {activeTab === 'issued' && (
+                        )}
+                        <div className={`grid ${activeTab === 'issued' ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                          <div>
+                            <label className={`block text-[9px] font-black uppercase tracking-widest mb-1.5 ${activeTab === 'received' ? 'text-emerald-400' : 'text-[#8a95a8]'}`}>
+                              {activeTab === 'received' ? 'Received Qty' : 'Issued Qty'} ({prod?.unit || 'U'})
+                            </label>
+                            <input required type="number" min="1" step="1" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} placeholder="0" className={`${inputClass} font-bold ${activeTab === 'received' ? 'border-emerald-500/50 text-white' : ''}`} />
+                          </div>
+                          {activeTab === 'issued' && (
                             <div>
                               <label className="block text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest mb-1.5">Process Type</label>
                               <select required value={item.process_type} onChange={e => updateItem(idx, 'process_type', e.target.value)} className={inputClass}>
@@ -612,23 +612,23 @@ function ProcessingContent() {
                                 <option value="manual">Manual</option>
                               </select>
                             </div>
-                            )}
-                          </div>
-                          {activeTab === 'issued' && prod && item.process_type && Number(item.quantity) > 0 && (
-                            <div className="bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] rounded-lg p-3 flex justify-between items-center">
-                              <div>
-                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Unit Cost</p>
-                                <p className="font-black text-[#e8eaf0] text-sm">৳ {getUnitCost(item).toFixed(2)}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Est. Subtotal</p>
-                                <p className="font-black text-white text-base">৳ {getItemTotal(item).toFixed(2)}</p>
-                              </div>
-                            </div>
                           )}
                         </div>
+                        {activeTab === 'issued' && prod && item.process_type && Number(item.quantity) > 0 && (
+                          <div className="bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] rounded-lg p-3 flex justify-between items-center">
+                            <div>
+                              <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Unit Cost</p>
+                              <p className="font-black text-[#e8eaf0] text-sm">৳ {getUnitCost(item).toFixed(2)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Est. Subtotal</p>
+                              <p className="font-black text-white text-base">৳ {getItemTotal(item).toFixed(2)}</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )
+                    </div>
+                  )
                 })}
               </div>
 
@@ -639,89 +639,89 @@ function ProcessingContent() {
               {/* Grand Total for Issued */}
               {activeTab === 'issued' && items.length > 0 && grandTotal > 0 && (
                 <div className="mt-5 border-t border-[rgba(255,255,255,0.04)] pt-5 flex flex-col items-end">
-                   <div className="w-full md:w-72 bg-[#0b0f1a] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 flex justify-between items-center shadow-inner">
-                     <span className="text-xs font-black text-[#8a95a8] uppercase tracking-widest">Est. Grand Total</span>
-                     <span className="font-black text-xl text-[#c9a84c]">৳ {grandTotal.toLocaleString()}</span>
-                   </div>
+                  <div className="w-full md:w-72 bg-[#0b0f1a] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 flex justify-between items-center shadow-inner">
+                    <span className="text-xs font-black text-[#8a95a8] uppercase tracking-widest">Est. Grand Total</span>
+                    <span className="font-black text-xl text-[#c9a84c]">৳ {grandTotal.toLocaleString()}</span>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Bottom Section Grid: Payments & Signatures */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               
-               {/* ── TRANSACTION / PAYMENT (ONLY FOR ISSUED) ── */}
-               {activeTab === 'issued' ? (
-                 <div className="bg-[#1a2235] border border-[rgba(255,255,255,0.04)] rounded-xl p-5 flex flex-col">
-                    <div className="flex items-center gap-3 mb-5">
-                       <input type="checkbox" checked={hasPayment} onChange={e => { setHasPayment(e.target.checked); if(!e.target.checked) setPaymentAmount(''); }} className="w-5 h-5 accent-[#c9a84c] rounded bg-[#131929]" id="add-adv-payment" />
-                       <label htmlFor="add-adv-payment" className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2 cursor-pointer">
-                         <Wallet className="w-4 h-4 text-[#c9a84c]" /> Register Payment
-                       </label>
-                    </div>
 
-                    {hasPayment && (
-                       <div className="space-y-5 animate-fade-in flex-1">
-                          <div className="bg-[#0b0f1a] rounded-xl p-4 border border-[rgba(255,255,255,0.05)]">
-                             <label className={labelClass}>Advance Amount (৳)</label>
-                             <div className="relative">
-                               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
-                               <input type="number" min="0" step="0.01" placeholder="0.00" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value ? Number(e.target.value) : '')} className={`${inputClass} pl-10 font-black text-white text-lg focus:border-[#c9a84c] focus:ring-[#c9a84c]/20`} />
-                             </div>
-                          </div>
+              {/* ── TRANSACTION / PAYMENT (ONLY FOR ISSUED) ── */}
+              {activeTab === 'issued' ? (
+                <div className="bg-[#1a2235] border border-[rgba(255,255,255,0.04)] rounded-xl p-5 flex flex-col">
+                  <div className="flex items-center gap-3 mb-5">
+                    <input type="checkbox" checked={hasPayment} onChange={e => { setHasPayment(e.target.checked); if (!e.target.checked) setPaymentAmount(''); }} className="w-5 h-5 accent-[#c9a84c] rounded bg-[#131929]" id="add-adv-payment" />
+                    <label htmlFor="add-adv-payment" className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2 cursor-pointer">
+                      <Wallet className="w-4 h-4 text-[#c9a84c]" /> Register Payment
+                    </label>
+                  </div>
 
-                          <div className="border-t border-[rgba(255,255,255,0.05)] pt-5">
-                             <label className={labelClass}>Payment Method</label>
-                             <div className="grid grid-cols-3 lg:grid-cols-4 gap-2">
-                               {['cash', 'bikash', 'nagad', 'rocket', 'bank_transfer', 'cheque'].map(m => (
-                                 <label key={m} className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer transition-all justify-center ${paymentMethod === m ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.1)] shadow-sm' : 'border-[rgba(255,255,255,0.05)] bg-[#0b0f1a] hover:bg-[rgba(255,255,255,0.02)]'}`}>
-                                    <input type="radio" value={m} checked={paymentMethod === m} onChange={() => setPaymentMethod(m as PaymentMethod)} className="hidden" />
-                                    <span className={`font-bold text-[9px] uppercase tracking-wider text-center ${paymentMethod === m ? 'text-[#c9a84c]' : 'text-[#8a95a8]'}`}>{m.replace(/_/g, ' ')}</span>
-                                 </label>
-                               ))}
-                             </div>
-                             {renderPaymentDetails()}
-                          </div>
-                       </div>
-                    )}
-                 </div>
-               ) : (
-                 // Empty div to keep grid layout balanced when receiving
-                 <div className="hidden md:block"></div>
-               )}
+                  {hasPayment && (
+                    <div className="space-y-5 animate-fade-in flex-1">
+                      <div className="bg-[#0b0f1a] rounded-xl p-4 border border-[rgba(255,255,255,0.05)]">
+                        <label className={labelClass}>Advance Amount (৳)</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+                          <input type="number" min="0" step="0.01" placeholder="0.00" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value ? Number(e.target.value) : '')} className={`${inputClass} pl-10 font-black text-white text-lg focus:border-[#c9a84c] focus:ring-[#c9a84c]/20`} />
+                        </div>
+                      </div>
 
-               {/* Signatures & Submit */}
-               <div className="bg-[#1a2235] border border-[rgba(255,255,255,0.04)] rounded-xl p-5 flex flex-col justify-between">
-                  <div className="space-y-4">
-                     <h3 className="text-sm font-black text-white flex items-center gap-2 mb-4 uppercase tracking-widest"><PenTool className="w-4 h-4 text-[#c9a84c]" /> Authorization</h3>
-                     <div>
-                       <label className={labelClass}>Authorized By *</label>
-                       <select required value={authorizedSignature} onChange={e => setAuthorizedSignature(e.target.value)} className={inputClass}>
-                          <option value="" disabled>-- Select Employee --</option>
-                          {employees.filter(emp => emp.is_authorizer).map(emp => (
-                             <option key={`auth-${emp.id}`} value={emp.name}>{emp.name}</option>
+                      <div className="border-t border-[rgba(255,255,255,0.05)] pt-5">
+                        <label className={labelClass}>Payment Method</label>
+                        <div className="grid grid-cols-3 lg:grid-cols-4 gap-2">
+                          {['cash', 'bikash', 'nagad', 'rocket', 'bank_transfer', 'cheque'].map(m => (
+                            <label key={m} className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer transition-all justify-center ${paymentMethod === m ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.1)] shadow-sm' : 'border-[rgba(255,255,255,0.05)] bg-[#0b0f1a] hover:bg-[rgba(255,255,255,0.02)]'}`}>
+                              <input type="radio" value={m} checked={paymentMethod === m} onChange={() => setPaymentMethod(m as PaymentMethod)} className="hidden" />
+                              <span className={`font-bold text-[9px] uppercase tracking-wider text-center ${paymentMethod === m ? 'text-[#c9a84c]' : 'text-[#8a95a8]'}`}>{m.replace(/_/g, ' ')}</span>
+                            </label>
                           ))}
-                       </select>
-                     </div>
-                     <div>
-                       <label className={labelClass}>Received / Handled By *</label>
-                       <input required type="text" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} placeholder="e.g. Driver / Employee Name" className={inputClass} />
-                     </div>
-                     <div>
-                       <label className={labelClass}>Note / Remarks</label>
-                       <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Optional note..." className={`${inputClass} resize-none min-h-[60px]`} />
-                     </div>
-                  </div>
+                        </div>
+                        {renderPaymentDetails()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Empty div to keep grid layout balanced when receiving
+                <div className="hidden md:block"></div>
+              )}
 
-                  <div className="mt-8 pt-5 border-t border-[rgba(255,255,255,0.04)]">
-                     <button type="submit" disabled={submitting} className={`w-full py-4 rounded-xl font-extrabold text-[#0a0900] text-sm uppercase tracking-wider shadow-[0_4px_16px_rgba(201,168,76,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 ${activeTab === 'issued' ? 'bg-gradient-to-r from-orange-400 to-amber-500' : 'bg-gradient-to-r from-emerald-400 to-green-500'}`}>
-                       {submitting
-                         ? <><div className="w-4 h-4 border-2 border-[#0a0900] border-t-transparent rounded-full animate-spin"></div> Processing...</>
-                         : activeTab === 'issued' ? 'Confirm Issue Material' : 'Confirm Receive Material'
-                       }
-                     </button>
+              {/* Signatures & Submit */}
+              <div className="bg-[#1a2235] border border-[rgba(255,255,255,0.04)] rounded-xl p-5 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-black text-white flex items-center gap-2 mb-4 uppercase tracking-widest"><PenTool className="w-4 h-4 text-[#c9a84c]" /> Authorization</h3>
+                  <div>
+                    <label className={labelClass}>Authorized By *</label>
+                    <select required value={authorizedSignature} onChange={e => setAuthorizedSignature(e.target.value)} className={inputClass}>
+                      <option value="" disabled>-- Select Employee --</option>
+                      {employees.filter(emp => emp.is_authorizer).map(emp => (
+                        <option key={`auth-${emp.id}`} value={emp.name}>{emp.name}</option>
+                      ))}
+                    </select>
                   </div>
-               </div>
+                  <div>
+                    <label className={labelClass}>Received / Handled By *</label>
+                    <input required type="text" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} placeholder="e.g. Driver / Employee Name" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Note / Remarks</label>
+                    <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Optional note..." className={`${inputClass} resize-none min-h-[60px]`} />
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-5 border-t border-[rgba(255,255,255,0.04)]">
+                  <button type="submit" disabled={submitting} className={`w-full py-4 rounded-xl font-extrabold text-[#0a0900] text-sm uppercase tracking-wider shadow-[0_4px_16px_rgba(201,168,76,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 ${activeTab === 'issued' ? 'bg-gradient-to-r from-orange-400 to-amber-500' : 'bg-gradient-to-r from-emerald-400 to-green-500'}`}>
+                    {submitting
+                      ? <><div className="w-4 h-4 border-2 border-[#0a0900] border-t-transparent rounded-full animate-spin"></div> Processing...</>
+                      : activeTab === 'issued' ? 'Confirm Issue Material' : 'Confirm Receive Material'
+                    }
+                  </button>
+                </div>
+              </div>
 
             </div>
           </form>
@@ -730,110 +730,110 @@ function ProcessingContent() {
 
         /* ── LIST VIEW (Visible when builder is closed) ── */
         <div className="bg-[#131929] rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[rgba(255,255,255,0.04)] overflow-hidden flex flex-col animate-in fade-in">
-           <div className="p-5 border-b border-[rgba(255,255,255,0.04)] bg-[#1a2235] flex justify-between items-center">
-              <h3 className="font-black text-[#e8eaf0] text-sm flex items-center gap-2 uppercase tracking-widest">
-                 <Truck className={`w-4 h-4 ${activeTab === 'issued' ? 'text-orange-400' : 'text-emerald-400'}`} /> Recent {activeTab === 'issued' ? 'Issues' : 'Receipts'} Log
-              </h3>
-              <span className="text-[10px] font-black bg-[#0b0f1a] border border-[rgba(255,255,255,0.05)] text-[#8a95a8] px-3 py-1 rounded uppercase tracking-widest shadow-inner">
-                 {logs.length} Records
-              </span>
-           </div>
-           
-           <div className="overflow-x-auto custom-scrollbar">
-              
-              {/* PC Table */}
-              <table className="w-full text-left hidden md:table">
-                 <thead className="bg-[#131929] border-b border-[rgba(255,255,255,0.04)]">
-                    <tr>
-                       <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Date & Ref</th>
-                       <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Processor</th>
-                       <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Material / Product</th>
-                       <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Details</th>
-                       <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8] text-right">Qty {activeTab === 'issued' ? 'Issued' : 'Received'}</th>
-                    </tr>
-                 </thead>
-                 <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
-                    {logs.map((log) => (
-                       <tr key={log.id} className="hover:bg-[rgba(255,255,255,0.02)] transition-colors cursor-pointer group" onClick={() => setViewingLog(log)}>
-                          <td className="px-5 py-4">
-                             <span className="font-bold text-[#e8eaf0] block text-sm">{new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                             <span className="text-[10px] text-[#c9a84c] font-black uppercase tracking-widest mt-0.5 block">#{log.id.split('-')[0].toUpperCase()}</span>
-                          </td>
-                          <td className="px-5 py-4">
-                             <span className="font-bold text-white block text-sm group-hover:text-[#c9a84c] transition-colors">{log.processor_details?.name || 'Unknown'}</span>
-                             {log.processor_details?.shop_name && <span className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mt-0.5 block">{log.processor_details.shop_name}</span>}
-                          </td>
-                          <td className="px-5 py-4">
-                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border shadow-inner ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
-                                   <Package className="w-4 h-4" />
-                                </div>
-                                <span className="font-bold text-[#e8eaf0] text-sm">{log.product_details?.name || 'Unknown'}</span>
-                             </div>
-                          </td>
-                          <td className="px-5 py-4 text-sm max-w-[200px]">
-                             {log.process_type && <span className="inline-block bg-[rgba(96,165,250,0.1)] text-blue-400 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded mb-1.5 mr-1 border border-[rgba(96,165,250,0.2)]">{log.process_type} {log.total_cost ? `(৳ ${Number(log.total_cost).toLocaleString()})` : ''}</span>}
-                             {log.note && <p className="text-[10px] font-bold text-[#8a95a8] truncate mb-1" title={log.note}>{log.note}</p>}
-                          </td>
-                          <td className="px-5 py-4 text-right">
-                             <span className={`inline-flex items-center gap-1 font-black text-sm px-3 py-1.5 rounded-lg border ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
-                                {activeTab === 'issued' ? '-' : '+'}{Math.round(Number(log.quantity))} <span className="text-[10px] font-black uppercase tracking-widest ml-1">{log.product_details?.unit || 'UNIT'}</span>
-                             </span>
-                          </td>
-                       </tr>
-                    ))}
-                    {logs.length === 0 && (
-                       <tr>
-                          <td colSpan={5} className="px-6 py-20 text-center text-[#4a5568]">
-                             <Truck className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                             <span className="block font-bold text-sm text-[#8a95a8]">No {activeTab} material logs found.</span>
-                          </td>
-                       </tr>
-                    )}
-                 </tbody>
-              </table>
+          <div className="p-5 border-b border-[rgba(255,255,255,0.04)] bg-[#1a2235] flex justify-between items-center">
+            <h3 className="font-black text-[#e8eaf0] text-sm flex items-center gap-2 uppercase tracking-widest">
+              <Truck className={`w-4 h-4 ${activeTab === 'issued' ? 'text-orange-400' : 'text-emerald-400'}`} /> Recent {activeTab === 'issued' ? 'Issues' : 'Receipts'} Log
+            </h3>
+            <span className="text-[10px] font-black bg-[#0b0f1a] border border-[rgba(255,255,255,0.05)] text-[#8a95a8] px-3 py-1 rounded uppercase tracking-widest shadow-inner">
+              {logs.length} Records
+            </span>
+          </div>
 
-              {/* Mobile Cards */}
-              <div className="md:hidden divide-y divide-[rgba(255,255,255,0.02)]">
-                {logs.length === 0 ? (
-                   <div className="px-6 py-16 text-center text-[#4a5568]">
-                     <Truck className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                     <span className="block font-bold text-sm text-[#8a95a8]">No {activeTab} logs found.</span>
-                   </div>
-                ) : (
-                   logs.map((log) => (
-                     <div key={log.id} onClick={() => setViewingLog(log)} className="p-4 hover:bg-[rgba(255,255,255,0.02)] transition-colors cursor-pointer">
-                        <div className="flex justify-between items-start mb-3">
-                           <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-inner ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
-                                 <Package className="w-5 h-5" />
-                              </div>
-                              <div>
-                                 <span className="font-bold text-[#e8eaf0] text-sm block">{log.products?.name || 'Unknown'}</span>
-                                 <span className="text-[10px] font-black text-[#c9a84c] uppercase tracking-widest">#{log.id.split('-')[0].toUpperCase()}</span>
-                              </div>
-                           </div>
-                           <div className="text-right">
-                              <span className={`inline-block font-black text-sm px-2 py-1 rounded border ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
-                                {activeTab === 'issued' ? '-' : '+'}{log.quantity} <span className="text-[9px] uppercase">{log.products?.unit}</span>
-                              </span>
-                           </div>
+          <div className="overflow-x-auto custom-scrollbar">
+
+            {/* PC Table */}
+            <table className="w-full text-left hidden md:table">
+              <thead className="bg-[#131929] border-b border-[rgba(255,255,255,0.04)]">
+                <tr>
+                  <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Date & Ref</th>
+                  <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Processor</th>
+                  <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Material / Product</th>
+                  <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8]">Details</th>
+                  <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-[#8a95a8] text-right">Qty {activeTab === 'issued' ? 'Issued' : 'Received'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
+                {logs.map((log) => (
+                  <tr key={log.id} className="hover:bg-[rgba(255,255,255,0.02)] transition-colors cursor-pointer group" onClick={() => setViewingLog(log)}>
+                    <td className="px-5 py-4">
+                      <span className="font-bold text-[#e8eaf0] block text-sm">{new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="text-[10px] text-[#c9a84c] font-black uppercase tracking-widest mt-0.5 block">#{log.id.split('-')[0].toUpperCase()}</span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="font-bold text-white block text-sm group-hover:text-[#c9a84c] transition-colors">{log.processor_details?.name || 'Unknown'}</span>
+                      {log.processor_details?.shop_name && <span className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mt-0.5 block">{log.processor_details.shop_name}</span>}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border shadow-inner ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
+                          <Package className="w-4 h-4" />
                         </div>
-                        <div className="bg-[#0b0f1a] border border-[rgba(255,255,255,0.02)] p-2.5 rounded-lg flex justify-between items-center">
-                           <div>
-                             <p className="font-bold text-white text-xs">{log.contacts?.name}</p>
-                             <p className="text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest">{new Date(log.date).toLocaleDateString('en-GB')}</p>
-                           </div>
-                           {log.process_type && <span className="inline-block bg-[rgba(96,165,250,0.1)] text-blue-400 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-[rgba(96,165,250,0.2)]">{log.process_type}</span>}
-                        </div>
-                     </div>
-                   ))
+                        <span className="font-bold text-[#e8eaf0] text-sm">{log.product_details?.name || 'Unknown'}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-sm max-w-[200px]">
+                      {log.process_type && <span className="inline-block bg-[rgba(96,165,250,0.1)] text-blue-400 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded mb-1.5 mr-1 border border-[rgba(96,165,250,0.2)]">{log.process_type} {log.total_cost ? `(৳ ${Number(log.total_cost).toLocaleString()})` : ''}</span>}
+                      {log.note && <p className="text-[10px] font-bold text-[#8a95a8] truncate mb-1" title={log.note}>{log.note}</p>}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <span className={`inline-flex items-center gap-1 font-black text-sm px-3 py-1.5 rounded-lg border ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
+                        {activeTab === 'issued' ? '-' : '+'}{Math.round(Number(log.quantity))} <span className="text-[10px] font-black uppercase tracking-widest ml-1">{log.product_details?.unit || 'UNIT'}</span>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {logs.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-20 text-center text-[#4a5568]">
+                      <Truck className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                      <span className="block font-bold text-sm text-[#8a95a8]">No {activeTab} material logs found.</span>
+                    </td>
+                  </tr>
                 )}
-              </div>
-           </div>
+              </tbody>
+            </table>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden divide-y divide-[rgba(255,255,255,0.02)]">
+              {logs.length === 0 ? (
+                <div className="px-6 py-16 text-center text-[#4a5568]">
+                  <Truck className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <span className="block font-bold text-sm text-[#8a95a8]">No {activeTab} logs found.</span>
+                </div>
+              ) : (
+                logs.map((log) => (
+                  <div key={log.id} onClick={() => setViewingLog(log)} className="p-4 hover:bg-[rgba(255,255,255,0.02)] transition-colors cursor-pointer">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-inner ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
+                          <Package className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-[#e8eaf0] text-sm block">{log.products?.name || 'Unknown'}</span>
+                          <span className="text-[10px] font-black text-[#c9a84c] uppercase tracking-widest">#{log.id.split('-')[0].toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block font-black text-sm px-2 py-1 rounded border ${activeTab === 'issued' ? 'bg-[rgba(251,146,60,0.1)] text-orange-400 border-[rgba(251,146,60,0.2)]' : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.2)]'}`}>
+                          {activeTab === 'issued' ? '-' : '+'}{log.quantity} <span className="text-[9px] uppercase">{log.products?.unit}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-[#0b0f1a] border border-[rgba(255,255,255,0.02)] p-2.5 rounded-lg flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-white text-xs">{log.contacts?.name}</p>
+                        <p className="text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest">{new Date(log.date).toLocaleDateString('en-GB')}</p>
+                      </div>
+                      {log.process_type && <span className="inline-block bg-[rgba(96,165,250,0.1)] text-blue-400 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-[rgba(96,165,250,0.2)]">{log.process_type}</span>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
-      
+
       {/* VIEW MODAL */}
       {viewingLog && <ProcessingLogModal log={viewingLog} onClose={() => setViewingLog(null)} />}
     </div>
@@ -896,7 +896,7 @@ function ProcessingLogModal({ log, onClose }: { log: any, onClose: () => void })
               <div className="flex flex-wrap gap-2 custom-scrollbar overflow-x-auto pb-1">
                 {(log.photo_urls as string[]).map((url: string, i: number) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer" className="block w-16 h-16 rounded-xl overflow-hidden border border-[rgba(255,255,255,0.1)] hover:border-[#c9a84c] transition-colors shadow-sm shrink-0">
-                    <img src={url} alt={`Photo ${i+1}`} className="w-full h-full object-cover" />
+                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                   </a>
                 ))}
               </div>
