@@ -9,7 +9,9 @@
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 const BASE_URL = rawBaseUrl && rawBaseUrl !== ''
   ? rawBaseUrl.replace(/\/$/, '')
-  : 'http://127.0.0.1:8000';
+  : typeof window !== 'undefined'
+    ? `http://${window.location.hostname}:8000`
+    : 'http://127.0.0.1:8000';
 
 // ─── Generic Fetch Wrapper for Unified API ───────────────────────────────────
 
@@ -132,6 +134,7 @@ export const api = {
   // ─── INTERNAL ACCOUNTS ─────────────────────────────────────────────────────
   getInternalAccounts: (params?: any) => unifiedApiCall('internal_account', 'list', undefined, params),
   createInternalAccount: (data: Record<string, any>) => unifiedApiCall('internal_account', 'create', undefined, data),
+  updateInternalAccount: (id: string, data: Record<string, any>) => unifiedApiCall('internal_account', 'update', id, data),
   deleteInternalAccount: (id: string) => unifiedApiCall('internal_account', 'delete', id),
 
   // ─── DAILY EXPENSES ───────────────────────────────────────────────────────

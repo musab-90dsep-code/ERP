@@ -752,7 +752,7 @@ function ExpensesContent() {
                         </thead>
                         <tbody className="divide-y divide-[rgba(255,255,255,0.06)] bg-[#1a2235]/20">
                            {paidExpenses.map(e => (
-                              <tr key={e.id} className="hover:bg-[#1a2235]/80 transition-colors">
+                              <tr key={e.id} onClick={() => setViewingExpense(e)} className="hover:bg-[#1a2235]/80 transition-colors cursor-pointer group">
                                  <td className="px-6 py-4">
                                     <div className="font-mono text-[11px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.18)] inline-block px-2.5 py-1 rounded mb-1.5">{e.invoice_no}</div>
                                     <div className="text-xs text-[#8a95a8] font-bold">{new Date(e.date).toLocaleDateString()}</div>
@@ -772,7 +772,7 @@ function ExpensesContent() {
                                     {e.photo_urls && e.photo_urls.length > 0 ? (
                                        <div className="flex gap-1.5">
                                           {(e.photo_urls as string[]).map((u: string, i: number) => (
-                                             <a key={i} href={u} target="_blank" rel="noreferrer" className="block w-8 h-8 rounded-md border border-[rgba(201,168,76,0.3)] overflow-hidden shadow-sm hover:scale-110 transition-transform relative group">
+                                             <a key={i} href={u} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="block w-8 h-8 rounded-md border border-[rgba(201,168,76,0.3)] overflow-hidden shadow-sm hover:scale-110 transition-transform relative group">
                                                 <img src={u} alt="Proof" className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                              </a>
@@ -785,9 +785,9 @@ function ExpensesContent() {
                                     <span className="block text-[9px] uppercase font-black text-emerald-500 mt-1 tracking-widest">Paid Successfully</span>
                                  </td>
                                  <td className="px-6 py-4 text-center">
-                                    <button onClick={() => setViewingExpense(e)} className="p-2.5 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors border border-transparent hover:border-[rgba(201,168,76,0.18)]" title="View Details">
-                                       <Eye className="w-5 h-5" />
-                                    </button>
+                                    <div className="text-[#8a95a8] group-hover:text-[#c9a84c] transition-colors">
+                                       <ReceiptText className="w-5 h-5 mx-auto" />
+                                    </div>
                                  </td>
                               </tr>
                            ))}

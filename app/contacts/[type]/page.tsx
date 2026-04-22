@@ -258,8 +258,19 @@ export default function ContactsTypePage() {
   };
 
   const handleDownloadAll = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (contacts.length === 0) {
+      alert("No contacts found to print.");
+      return;
+    }
+
+    // Create a hidden iframe
+    let printFrame = document.getElementById('print-frame') as HTMLIFrameElement;
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'print-frame';
+      printFrame.style.display = 'none';
+      document.body.appendChild(printFrame);
+    }
 
     const tableRows = contacts.map((c, i) => {
       const phones = c.phone_numbers?.map((p: any) => p.number).join(', ') || c.phone || 'N/A';
@@ -274,16 +285,19 @@ export default function ContactsTypePage() {
       `;
     }).join('');
 
-    printWindow.document.write(`
+    const html = `
       <html>
         <head>
           <title>${displayTitle} List - LedgerGhor</title>
           <style>
-            body { font-family: sans-serif; padding: 40px; }
+            body { font-family: sans-serif; padding: 20px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th { background: #f8f9fa; text-align: left; padding: 12px 10px; font-size: 12px; border-bottom: 2px solid #ddd; text-transform: uppercase; }
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
             .footer { margin-top: 50px; text-align: right; font-size: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
+            @media print {
+              .no-print { display: none; }
+            }
           </style>
         </head>
         <body>
@@ -309,13 +323,22 @@ export default function ContactsTypePage() {
           <div class="footer">
             Printed from LedgerGhor ERP System
           </div>
-          <script>
-            window.onload = function() { window.print(); window.close(); }
-          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+      
+      // Wait for images/styles to load then print
+      setTimeout(() => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+      }, 500);
+    }
   };
 
   const resetForm = () => {
@@ -355,8 +378,15 @@ export default function ContactsTypePage() {
 
   const handleDownloadIndividualLedger = () => {
     if (!viewingContact) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    
+    // Create a hidden iframe
+    let printFrame = document.getElementById('print-frame') as HTMLIFrameElement;
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'print-frame';
+      printFrame.style.display = 'none';
+      document.body.appendChild(printFrame);
+    }
 
     const allItems = [
       ...transactions.invoices.map(inv => ({ ...inv, _itemType: 'invoice', sortDate: new Date(inv.date).getTime() })),
@@ -379,7 +409,7 @@ export default function ContactsTypePage() {
           <td style="padding: 10px; font-size: 11px;">${new Date(item.date).toLocaleDateString()}</td>
           <td style="padding: 10px; font-size: 11px;">
             <strong>${type}</strong><br/>
-            <small style="color: #666;">${item.id?.substring(0,8).toUpperCase() || ''} ${item.method ? `(${item.method})` : ''}</small>
+            <small style="color: #666;">${item.id?.substring(0, 8).toUpperCase() || ''} ${item.method ? `(${item.method})` : ''}</small>
           </td>
           <td style="padding: 10px; font-size: 11px; text-align: right;">${debit > 0 ? `৳ ${debit.toLocaleString()}` : '-'}</td>
           <td style="padding: 10px; font-size: 11px; text-align: right;">${credit > 0 ? `৳ ${credit.toLocaleString()}` : '-'}</td>
@@ -387,7 +417,7 @@ export default function ContactsTypePage() {
       `;
     }).join('');
 
-    printWindow.document.write(`
+    const html = `
       <html>
         <head>
           <title>Statement - ${viewingContact.name}</title>
@@ -437,12 +467,22 @@ export default function ContactsTypePage() {
             <p>Total Paid: <strong>৳ ${totalPaid.toLocaleString()}</strong></p>
             <h3 style="color: ${balance > 0 ? '#e11d48' : '#059669'}">Net Balance: ৳ ${Math.abs(balance).toLocaleString()} ${balance > 0 ? '(Due)' : '(Advance)'}</h3>
           </div>
-
-          <script>window.onload = function() { window.print(); window.close(); }</script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+      
+      // Wait for images/styles to load then print
+      setTimeout(() => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+      }, 500);
+    }
   };
 
   const displayTitle = rawType.replace(/^[a-z]/, char => char.toUpperCase());
@@ -1266,7 +1306,7 @@ export default function ContactsTypePage() {
                       <List className="w-4 h-4 text-[#8a95a8]" />
                       <h4 className="text-sm font-black text-[#8a95a8] uppercase tracking-widest">Detailed Timeline</h4>
                     </div>
-                    <button 
+                    <button
                       onClick={handleDownloadIndividualLedger}
                       className="flex items-center gap-2 px-4 py-2 bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.18)] rounded-xl text-xs font-bold hover:bg-[#c9a84c] hover:text-[#131929] transition-all shadow-lg"
                     >

@@ -17,7 +17,7 @@ export default function InvoicesPage() {
    );
 }
 
-type InvoiceItem = { product_id: string; quantity: number; price: any; selected_head?: string };
+type InvoiceItem = { product_id: string; quantity: any; price: any; selected_head?: string };
 
 function InvoicesContent() {
    const router = useRouter();
@@ -43,7 +43,7 @@ function InvoicesContent() {
    const [form, setForm] = useState({
       contact_id: '',
       date: new Date().toISOString().split('T')[0],
-      items: [{ product_id: '', quantity: 1, price: '' as any }] as InvoiceItem[],
+      items: [{ product_id: '', quantity: '', price: '' as any }] as InvoiceItem[],
       discount: '' as any,
       discount_type: 'amount',
       discount_method: '',
@@ -78,14 +78,28 @@ function InvoicesContent() {
             const pays = Array.isArray(paysRaw) ? paysRaw : paysRaw.results || [];
 
             let due = 0;
-            if (activeTab === 'sell' || activeTab === 'return') {
-               // Customer Ledger: Sum of all unpaid 'sell' balances minus unpaid 'return' balances, minus any extra standalone payments
+            if (activeTab === 'sell' || activeTab === 'return' || activeTab === 'exchange') {
+               // Customer Ledger
                const totalSellDue = (invs || []).filter((i: any) => i.type === 'sell').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const totalReturnDue = (invs || []).filter((i: any) => i.type === 'return').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
+
+               // Full return credit (abs of total for exchange/return invoices)
+               const totalReturnCredit = (invs || [])
+                  .filter((i: any) => i.type === 'return' || (i.type === 'exchange' && Number(i.total) < 0))
+                  .reduce((acc: number, i: any) => acc + Math.abs(Number(i.total || 0)), 0);
+
+               // Cash refunds paid out (payments OUT linked to exchange invoices)
+               const exchangeInvoiceIds = new Set((invs || [])
+                  .filter((i: any) => i.type === 'exchange' && Number(i.total) < 0)
+                  .map((i: any) => i.id));
+               const cashRefundsPaid = (pays || [])
+                  .filter((p: any) => p.type === 'out' && p.invoice && exchangeInvoiceIds.has(p.invoice))
+                  .reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+
                const standalonePaysIn = (pays || []).filter((p: any) => p.type === 'in' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
                const standalonePaysOut = (pays || []).filter((p: any) => p.type === 'out' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
 
-               due = (totalSellDue - totalReturnDue) - (standalonePaysIn - standalonePaysOut);
+               // Due = sell due - full return credit - cash refunds - standalone in payments + standalone out payments
+               due = totalSellDue - totalReturnCredit - cashRefundsPaid - (standalonePaysIn - standalonePaysOut);
             } else if (activeTab === 'buy') {
                // Supplier Ledger: Sum of all unpaid 'buy' balances minus unpaid returns, minus extra standalone payments
                const totalBuyDue = (invs || []).filter((i: any) => i.type === 'buy').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
@@ -128,7 +142,7 @@ function InvoicesContent() {
                items: (order.items && order.items.length > 0)
                   ? order.items.map((i: any) => ({
                      product_id: i.product_id || '',
-                     quantity: Number(i.quantity) || 1,
+                     quantity: i.quantity || '',
                      price: Number(i.price) || 0,
                      selected_head: i.selected_head || ''
                   }))
@@ -166,8 +180,8 @@ function InvoicesContent() {
       } catch (err) { console.error('fetchInvoices:', err); }
    };
 
-   const handleAddItem = () => setForm({ ...form, items: [...form.items, { product_id: '', quantity: 1, price: '' as any }] });
-   const handleAddReturnedItem = () => setForm({ ...form, returnedItems: [...form.returnedItems, { product_id: '', quantity: 1, price: '' as any }] });
+   const handleAddItem = () => setForm({ ...form, items: [...form.items, { product_id: '', quantity: '', price: '' as any }] });
+   const handleAddReturnedItem = () => setForm({ ...form, returnedItems: [...form.returnedItems, { product_id: '', quantity: '', price: '' as any }] });
 
    const handleRemoveItem = (index: number) => {
       const newItems = [...form.items];
@@ -239,7 +253,9 @@ function InvoicesContent() {
       setForm({ ...form, payment_amount: amt });
    };
 
-   const due = Math.max(0, total - Number(form.payment_amount));
+   // For returns (negative total): remaining credit = |total| - paid. For sales: remaining due = total - paid.
+   const remainingCredit = total < 0 ? Math.max(0, Math.abs(total) - Number(form.payment_amount)) : 0;
+   const due = total >= 0 ? Math.max(0, total - Number(form.payment_amount)) : 0;
 
    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -278,8 +294,10 @@ function InvoicesContent() {
             discount: actualDiscount,
             total: total,
             paid_amount: Math.round(Number(form.payment_amount) * 100) / 100,
-            due_amount: Math.round(due * 100) / 100,
-            payment_status: due <= 0 ? 'paid' : (form.payment_amount > 0 ? 'partial' : 'unpaid'),
+            due_amount: Math.round((total < 0 ? remainingCredit : due) * 100) / 100,
+            payment_status: total < 0
+               ? (remainingCredit <= 0 ? 'paid' : (Number(form.payment_amount) > 0 ? 'partial' : 'unpaid'))
+               : (due <= 0 ? 'paid' : (Number(form.payment_amount) > 0 ? 'partial' : 'unpaid')),
             authorized_signature: form.authorized_signature,
             received_by: form.received_by,
             items: combinedItems
@@ -343,7 +361,7 @@ function InvoicesContent() {
       setHasPayment(false);
       setHasDiscount(false);
       setForm({
-         contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: 1, price: '' as any }] as InvoiceItem[], discount: '' as any, discount_type: 'amount', discount_method: '',
+         contact_id: '', date: new Date().toISOString().split('T')[0], items: [{ product_id: '', quantity: '', price: '' as any }] as InvoiceItem[], discount: '' as any, discount_type: 'amount', discount_method: '',
          payment_amount: '' as any, payment_method: 'cash', cheque_type: 'own', payment_details: {}, authorized_signature: '', received_by: '',
          returnedItems: []
       });
@@ -730,7 +748,7 @@ function InvoicesContent() {
                                              )}
                                           </td>
                                           <td style={{ padding: '10px 14px' }}>
-                                             <input required type="number" min="1" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
+                                             <input required type="number" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
                                           </td>
                                           <td style={{ padding: '10px 14px' }}>
                                              <input required type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
@@ -799,7 +817,7 @@ function InvoicesContent() {
                                                    )}
                                                 </td>
                                                 <td style={{ padding: '10px 14px' }}>
-                                                   <input required type="number" min="1" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value), true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
+                                                   <input required type="number" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value), true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
                                                 </td>
                                                 <td style={{ padding: '10px 14px' }}>
                                                    <input required type="number" step="0.01" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value === '' ? '' : Number(e.target.value), true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
@@ -860,20 +878,46 @@ function InvoicesContent() {
                                  </div>
                               )}
                            </div>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid ' + N.borderSub, fontSize: 15, fontWeight: 900 }}>
-                              <span style={{ color: N.text }}>{previousDue > 0 ? 'Current Total:' : 'Total:'}</span>
-                              <span style={{ color: N.goldBr, fontFamily: 'monospace' }}>৳ {total.toFixed(2)}</span>
-                           </div>
-                           {previousDue > 0 && (
+                           {activeTab === 'exchange' && total < 0 ? (
+                              <div style={{ paddingTop: 12, borderTop: '1px solid ' + N.borderSub }}>
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
+                                    <span style={{ color: N.textSub }}>Return Credit:</span>
+                                    <span style={{ fontWeight: 800, color: N.red, fontFamily: 'monospace' }}>৳ {Math.abs(total).toFixed(2)}</span>
+                                 </div>
+                                 {hasPayment && Number(form.payment_amount) > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
+                                       <span style={{ color: N.textSub }}>Cash Refund (Out):</span>
+                                       <span style={{ fontWeight: 800, color: N.orange, fontFamily: 'monospace' }}>- ৳ {Number(form.payment_amount).toFixed(2)}</span>
+                                    </div>
+                                 )}
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px dashed ' + N.borderSub, fontSize: 15, fontWeight: 900 }}>
+                                    <span style={{ color: N.text }}>Net Credit to Account:</span>
+                                    <span style={{ color: N.green, fontFamily: 'monospace' }}>৳ {remainingCredit.toFixed(2)}</span>
+                                 </div>
+                                 <p style={{ fontSize: 10, color: N.textMut, marginTop: 6, textAlign: 'right' }}>
+                                    {previousDue > 0
+                                       ? `Will reduce customer due: ৳${previousDue.toFixed(2)} → ৳${Math.max(0, previousDue - Math.abs(total) - Number(form.payment_amount || 0)).toFixed(2)}`
+                                       : `Will be added to customer advance`}
+                                 </p>
+                              </div>
+                           ) : (
                               <>
-                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13, color: N.textSub }}>
-                                    <span>Previous Due:</span>
-                                    <span style={{ color: N.red, fontWeight: 800, fontFamily: 'monospace' }}>৳ {previousDue.toFixed(2)}</span>
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid ' + N.borderSub, fontSize: 15, fontWeight: 900 }}>
+                                    <span style={{ color: N.text }}>{previousDue > 0 ? 'Current Total:' : 'Total:'}</span>
+                                    <span style={{ color: N.goldBr, fontFamily: 'monospace' }}>৳ {total.toFixed(2)}</span>
                                  </div>
-                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, marginTop: 10, borderTop: '1px dashed ' + N.borderSub, fontSize: 16, fontWeight: 900 }}>
-                                    <span style={{ color: N.text }}>Grand Total:</span>
-                                    <span style={{ color: N.goldBr, fontFamily: 'monospace' }}>৳ {(total + previousDue).toFixed(2)}</span>
-                                 </div>
+                                 {previousDue > 0 && (
+                                    <>
+                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13, color: N.textSub }}>
+                                          <span>Previous Due:</span>
+                                          <span style={{ color: N.red, fontWeight: 800, fontFamily: 'monospace' }}>৳ {previousDue.toFixed(2)}</span>
+                                       </div>
+                                       <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, marginTop: 10, borderTop: '1px dashed ' + N.borderSub, fontSize: 16, fontWeight: 900 }}>
+                                          <span style={{ color: N.text }}>Grand Total:</span>
+                                          <span style={{ color: N.goldBr, fontFamily: 'monospace' }}>৳ {(total + previousDue).toFixed(2)}</span>
+                                       </div>
+                                    </>
+                                 )}
                               </>
                            )}
                         </div>
@@ -897,6 +941,11 @@ function InvoicesContent() {
                                     style={{ ...inp, paddingLeft: 34, fontSize: 18, fontWeight: 900, color: N.goldBr, background: N.card2 }} />
                               </div>
                               {due > 0 && <p style={{ fontSize: 11, fontWeight: 800, color: N.red, textAlign: 'right', marginTop: -10, marginBottom: 14 }}>Remaining Due: ৳ {due.toFixed(2)}</p>}
+                              {total < 0 && Number(form.payment_amount) > 0 && (
+                                 <p style={{ fontSize: 11, fontWeight: 800, color: N.green, textAlign: 'right', marginTop: -10, marginBottom: 14 }}>
+                                    Remaining Credit to Customer: ৳ {Math.abs(total + Number(form.payment_amount)).toFixed(2)}
+                                 </p>
+                              )}
 
                               <label style={lbl}>Payment Method</label>
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginBottom: 16 }}>
@@ -1063,19 +1112,36 @@ function InvoiceViewModal({ invoice, onClose }: { invoice: any, onClose: () => v
                         </div>
                      )}
                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid black', marginTop: 10, fontWeight: 900, fontSize: 20 }}>
-                        <span>Total:</span>
-                        <span>৳{Number(invoice.total).toLocaleString()}</span>
+                        <span>{Number(invoice.total) < 0 ? 'Total Credit:' : 'Total:'}</span>
+                        <span style={{ color: Number(invoice.total) < 0 ? '#c00' : 'black' }}>
+                           ৳{Math.abs(Number(invoice.total)).toLocaleString()}
+                        </span>
                      </div>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, fontWeight: 700, color: 'green' }}>
-                        <span>Amount Paid:</span>
-                        <span>৳{Number(invoice.paid_amount).toLocaleString()}</span>
-                     </div>
-                     {Number(invoice.due_amount) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, fontWeight: 700, color: 'red' }}>
-                           <span>Balance Due:</span>
-                           <span>৳{Number(invoice.due_amount).toLocaleString()}</span>
+                     {Number(invoice.paid_amount) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, fontWeight: 700, color: 'green' }}>
+                           <span>{Number(invoice.total) < 0 ? 'Refund Paid (Cash):' : 'Amount Paid:'}</span>
+                           <span>৳{Number(invoice.paid_amount).toLocaleString()}</span>
                         </div>
                      )}
+                     {(() => {
+                        const t = Number(invoice.total);
+                        const p = Number(invoice.paid_amount);
+                        if (t < 0) {
+                           const credit = Math.abs(t) - p;
+                           return credit > 0 ? (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', fontSize: 14, fontWeight: 700, color: '#1a6b3c', background: '#f0fff4', borderRadius: 6, marginTop: 6 }}>
+                                 <span>✅ Added to Customer Advance:</span>
+                                 <span>৳{credit.toLocaleString()}</span>
+                              </div>
+                           ) : null;
+                        }
+                        return t >= 0 && p < t ? (
+                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 14, fontWeight: 700, color: 'red' }}>
+                              <span>Balance Due:</span>
+                              <span>৳{Number(invoice.due_amount).toLocaleString()}</span>
+                           </div>
+                        ) : null;
+                     })()}
                   </div>
                </div>
 

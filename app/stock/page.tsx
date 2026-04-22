@@ -17,6 +17,7 @@ function StockContent() {
   const [submitting, setSubmitting] = useState(false);
   const [hasBarcode, setHasBarcode] = useState(false);
   const [showHeads, setShowHeads] = useState(false);
+  const [showRawHeads, setShowRawHeads] = useState(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,7 +45,8 @@ function StockContent() {
     unit: 'pcs', unit_value: 1, barcode: '', use_for_processing: false,
     processing_price_auto: '', processing_price_manual: '',
     image_urls: [] as string[],
-    product_heads: [] as string[]
+    product_heads: [] as string[],
+    product_quality: ''
   });
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -230,7 +232,8 @@ function StockContent() {
         processing_price_auto: formData.processing_price_auto === '' ? 0 : Math.round(parseFloat(String(formData.processing_price_auto)) * 100) / 100,
         processing_price_manual: formData.processing_price_manual === '' ? 0 : Math.round(parseFloat(String(formData.processing_price_manual)) * 100) / 100,
         image_urls: finalImageUrls,
-        product_heads: category === 'finished-goods' && formData.product_heads ? formData.product_heads.filter((h: string) => h.trim()) : [],
+        product_heads: formData.product_heads ? formData.product_heads.filter((h: string) => h.trim()) : [],
+        product_quality: formData.product_quality || '',
       };
 
       if (editingId) {
@@ -252,11 +255,13 @@ function StockContent() {
     setEditingId(null);
     setHasBarcode(false);
     setShowHeads(false);
+    setShowRawHeads(false);
     setFormData({
       name: '', sku: '', price: '', cost: '', stock_quantity: '', is_tracked: true,
       low_stock_alert: false, minimum_stock: '',
       unit: 'pcs', barcode: '', use_for_processing: false, processing_price_auto: '', processing_price_manual: '', image_urls: [],
-      product_heads: []
+      product_heads: [],
+      product_quality: ''
     });
     setImageFiles([]);
     setImagePreviews([]);
@@ -279,11 +284,13 @@ function StockContent() {
       processing_price_auto: product.processing_price_auto ? Math.floor(Number(product.processing_price_auto)) : '',
       processing_price_manual: product.processing_price_manual ? Math.floor(Number(product.processing_price_manual)) : '',
       image_urls: product.image_urls || [],
-      product_heads: product.product_heads || []
+      product_heads: product.product_heads || [],
+      product_quality: product.product_quality || ''
     });
     setHasBarcode(!!product.barcode);
     const heads = product.product_heads || [];
     setShowHeads(heads.length > 0);
+    setShowRawHeads(heads.length > 0 && product.category === 'raw-materials');
     setImagePreviews(product.image_urls || []);
     setImageFiles([]);
     setEditingId(product.id);
@@ -425,6 +432,15 @@ function StockContent() {
               <input required type="number" onKeyDown={blockInvalidChar} value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} className={inputClass} />
             </div>
             <div>
+              <label className={labelClass}>Product Quality</label>
+              <select value={formData.product_quality} onChange={e => setFormData({ ...formData, product_quality: e.target.value })} className={inputClass}>
+                <option value="">— Select Quality —</option>
+                <option value="Light">Light</option>
+                <option value="Medium">Medium</option>
+                <option value="AC">AC</option>
+              </select>
+            </div>
+            <div>
               <label className={labelClass}>Unit</label>
               <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} className={inputClass}>
                 <option value="pcs">Pieces (pcs)</option>
@@ -499,6 +515,7 @@ function StockContent() {
               </div>
             )}
 
+            {/* ── Finished Goods: Product Variants ── */}
             {!isRawMaterials && (
               <div className="md:col-span-3 p-5 bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.15)] rounded-xl">
                 <label className="flex items-center gap-3 cursor-pointer mb-1 w-max select-none">
@@ -520,6 +537,52 @@ function StockContent() {
                           <input
                             type="text"
                             placeholder="e.g. Large, Red, Premium..."
+                            value={head}
+                            onChange={e => {
+                              const updated = [...formData.product_heads];
+                              updated[hi] = e.target.value;
+                              setFormData({ ...formData, product_heads: updated });
+                            }}
+                            className={inputClass}
+                          />
+                          {formData.product_heads.length > 1 && (
+                            <button type="button" onClick={() => setFormData({ ...formData, product_heads: formData.product_heads.filter((_: string, i: number) => i !== hi) })} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => setFormData({ ...formData, product_heads: [...formData.product_heads, ''] })} className="text-[11px] font-bold text-[#0a0900] bg-[#c9a84c] hover:bg-[#f0c040] px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-md">
+                      <Plus className="w-3.5 h-3.5" /> Add Another Variant
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Raw Materials: Product Variants ── */}
+            {isRawMaterials && (
+              <div className="md:col-span-3 p-5 bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.15)] rounded-xl">
+                <label className="flex items-center gap-3 cursor-pointer mb-1 w-max select-none">
+                  <input type="checkbox" checked={showRawHeads} onChange={e => {
+                    setShowRawHeads(e.target.checked);
+                    if (!e.target.checked) setFormData({ ...formData, product_heads: [] });
+                    else if (formData.product_heads.length === 0) setFormData({ ...formData, product_heads: [''] });
+                  }} className="w-5 h-5 accent-[#c9a84c] rounded" />
+                  <span className="text-sm font-bold text-[#c9a84c]">Add Material Variants / Categories</span>
+                </label>
+                <p className="text-[11px] font-medium text-[#8a95a8] mb-4 ml-8">e.g. Grade: A, B — or Type: Fine, Coarse</p>
+
+                {showRawHeads && (
+                  <div className="animate-fade-in ml-8">
+                    <div className="flex flex-col gap-3 mb-4">
+                      {formData.product_heads.map((head: string, hi: number) => (
+                        <div key={hi} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-[#c9a84c] w-4 text-right shrink-0">{hi + 1}.</span>
+                          <input
+                            type="text"
+                            placeholder="e.g. Grade A, Type-1..."
                             value={head}
                             onChange={e => {
                               const updated = [...formData.product_heads];
@@ -889,8 +952,21 @@ function StockContent() {
                   <div className="text-[10px] font-bold text-[#8a95a8] mb-3 uppercase tracking-widest">
                     {viewingProduct.category === 'raw-materials' ? 'Raw Material' : 'Finished Goods'}
                   </div>
-                  <div className="inline-flex w-max mx-auto sm:mx-0 items-center gap-1.5 px-3 py-1 bg-[#1a2235] text-[#c9a84c] border border-[rgba(201,168,76,0.2)] rounded-lg font-black text-lg mb-2 shadow-sm">
-                    ৳ {Math.floor(Number(viewingProduct.price))}
+                  <div className="flex flex-wrap gap-2 mb-2 justify-center sm:justify-start">
+                    <div className="inline-flex w-max items-center gap-1.5 px-3 py-1 bg-[#1a2235] text-[#c9a84c] border border-[rgba(201,168,76,0.2)] rounded-lg font-black text-lg shadow-sm">
+                      ৳ {Math.floor(Number(viewingProduct.price))}
+                    </div>
+                    {viewingProduct.product_quality && (
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg font-black text-sm shadow-sm border ${
+                        viewingProduct.product_quality === 'AC'
+                          ? 'bg-[rgba(96,165,250,0.1)] text-[#60a5fa] border-[rgba(96,165,250,0.3)]'
+                          : viewingProduct.product_quality === 'Medium'
+                          ? 'bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border-[rgba(201,168,76,0.3)]'
+                          : 'bg-[rgba(52,211,153,0.1)] text-emerald-400 border-[rgba(52,211,153,0.3)]'
+                      }`}>
+                        ★ {viewingProduct.product_quality}
+                      </div>
+                    )}
                   </div>
                   {viewingProduct.use_for_processing && (
                     <div className="mt-1">
@@ -946,25 +1022,33 @@ function StockContent() {
                     </>
                   ) : (
                     <>
-                      <h4 className="text-[10px] font-black text-[#c9a84c] uppercase tracking-widest mb-4 flex items-center gap-2"><Printer className="w-3 h-3" /> Pricing Details</h4>
-                      <ul className="space-y-3">
-                        <li className="flex justify-between items-center text-sm border-b border-[rgba(255,255,255,0.02)] pb-2">
-                          <span className="text-[#8a95a8] font-semibold">Cost Price</span>
-                          <span className="font-bold text-white">৳ {Math.floor(Number(viewingProduct.cost || 0))}</span>
-                        </li>
-                        {viewingProduct.use_for_processing && (
-                          <>
-                            <li className="flex justify-between items-center text-sm border-b border-[rgba(255,255,255,0.02)] pb-2">
-                              <span className="text-[#8a95a8] font-semibold">Auto Process Price</span>
-                              <span className="font-bold text-white">৳ {Math.floor(Number(viewingProduct.processing_price_auto))}</span>
-                            </li>
-                            <li className="flex justify-between items-center text-sm">
-                              <span className="text-[#8a95a8] font-semibold">Manual Process Price</span>
-                              <span className="font-bold text-white">৳ {Math.floor(Number(viewingProduct.processing_price_manual))}</span>
-                            </li>
-                          </>
-                        )}
-                      </ul>
+                      <h4 className="text-[10px] font-black text-[#c9a84c] uppercase tracking-widest mb-4 flex items-center gap-2"><List className="w-3 h-3" /> Material Variants</h4>
+                      {viewingProduct.product_heads && viewingProduct.product_heads.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {viewingProduct.product_heads.map((head: string, hi: number) => (
+                            <span key={hi} className="bg-[#131929] text-[#e8eaf0] border border-[rgba(255,255,255,0.06)] px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm">
+                              {head}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex justify-center items-center py-6">
+                          <span className="text-xs font-bold text-[#4a5568] uppercase tracking-widest">No Variants Available</span>
+                        </div>
+                      )}
+                      {viewingProduct.use_for_processing && (
+                        <div className="mt-4 pt-3 border-t border-[rgba(255,255,255,0.04)] space-y-2">
+                          <p className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-2">Processing Prices</p>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#8a95a8]">Auto</span>
+                            <span className="font-bold text-white">৳ {Math.floor(Number(viewingProduct.processing_price_auto))}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#8a95a8]">Manual</span>
+                            <span className="font-bold text-white">৳ {Math.floor(Number(viewingProduct.processing_price_manual))}</span>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

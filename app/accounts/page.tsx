@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Plus, Trash2, Wallet, Building2, X } from 'lucide-react';
+import { Plus, Trash2, Wallet, Building2, X, Eye, Pencil, FileText } from 'lucide-react';
 
 export default function AccountsPage() {
   const [internalAccounts, setInternalAccounts] = useState<any[]>([]);
@@ -11,6 +11,8 @@ export default function AccountsPage() {
   const [accountData, setAccountData] = useState({
     account_type: 'wallet', provider_name: '', account_name: '', account_number: '', branch: ''
   });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingAccount, setViewingAccount] = useState<any | null>(null);
 
   useEffect(() => {
     fetchInternalAccounts();
@@ -26,13 +28,35 @@ export default function AccountsPage() {
   const handleAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createInternalAccount(accountData);
-      setShowAccountForm(false);
-      setAccountData({ account_type: 'wallet', provider_name: '', account_name: '', account_number: '', branch: '' });
+      if (editingId) {
+        await api.updateInternalAccount(editingId, accountData);
+      } else {
+        await api.createInternalAccount(accountData);
+      }
+      resetForm();
       fetchInternalAccounts();
     } catch (err) {
       alert('Error saving account. Please check your connection.');
     }
+  };
+
+  const handleEdit = (acc: any) => {
+    setAccountData({
+      account_type: acc.account_type,
+      provider_name: acc.provider_name,
+      account_name: acc.account_name,
+      account_number: acc.account_number,
+      branch: acc.branch || ''
+    });
+    setEditingId(acc.id);
+    setShowAccountForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetForm = () => {
+    setShowAccountForm(false);
+    setEditingId(null);
+    setAccountData({ account_type: 'wallet', provider_name: '', account_name: '', account_number: '', branch: '' });
   };
 
   const handleDelete = async (_table: string, id: string) => {
@@ -52,6 +76,62 @@ export default function AccountsPage() {
 
   return (
     <div className="pb-12 font-sans animate-in fade-in duration-300">
+
+      {/* ─── VIEW MODAL ─── */}
+      {viewingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0f1a]/80 backdrop-blur-sm p-4 w-full animate-fade-in">
+          <div className="bg-[#131929] border border-[rgba(201,168,76,0.2)] rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-[rgba(255,255,255,0.04)] bg-[#1a2235] flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                 <div className={`p-2 rounded-lg ${viewingAccount.account_type === 'wallet' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                    {viewingAccount.account_type === 'wallet' ? <Wallet className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
+                 </div>
+                 <h3 className="font-black text-white uppercase tracking-wider">Account Details</h3>
+              </div>
+              <button onClick={() => setViewingAccount(null)} className="p-2 text-[#8a95a8] hover:text-white bg-[#131929] rounded-xl border border-white/5">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+               <div>
+                  <label className="text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-2 block">Provider / Bank</label>
+                  <p className={`text-2xl font-black ${viewingAccount.account_type === 'wallet' ? 'text-emerald-400' : 'text-blue-400'}`}>{viewingAccount.provider_name}</p>
+               </div>
+
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-2 block">Account Number</label>
+                    <p className="text-lg font-black text-white font-mono tracking-wider">{viewingAccount.account_number}</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-2 block">Type</label>
+                    <p className="text-sm font-bold text-[#c9a84c] uppercase">{viewingAccount.account_type}</p>
+                  </div>
+               </div>
+
+               <div className="pt-6 border-t border-white/5">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Account Holder</span>
+                    <span className="text-sm font-bold text-white">{viewingAccount.account_name || 'N/A'}</span>
+                  </div>
+                  {viewingAccount.branch && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Branch</span>
+                      <span className="text-sm font-bold text-[#c9a84c]">{viewingAccount.branch}</span>
+                    </div>
+                  )}
+               </div>
+            </div>
+
+            <div className="p-6 bg-[#1a2235]/40 border-t border-white/5 flex justify-end">
+               <button onClick={() => setViewingAccount(null)} className="px-6 py-2.5 bg-[#131929] text-[#e8eaf0] rounded-xl font-black text-xs uppercase tracking-widest border border-white/10 hover:bg-[#1a2235] transition-colors">
+                  Close Window
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Dynamic Header */}
       <div className="p-8 rounded-3xl text-white shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[rgba(201,168,76,0.18)] relative overflow-hidden mb-8 transition-colors duration-500 bg-gradient-to-r from-[#0d1613] to-[#121e1a]">
@@ -77,7 +157,7 @@ export default function AccountsPage() {
                <h2 className="text-2xl font-black text-[#e8eaf0] tracking-tight">Saved Accounts</h2>
                <p className="text-sm text-[#8a95a8] font-medium mt-1">Manage your internal company bank and mobile wallet accounts.</p>
             </div>
-            <button onClick={() => setShowAccountForm(!showAccountForm)} className="w-full sm:w-auto bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] px-6 py-3 rounded-xl font-extrabold flex justify-center items-center gap-2 hover:scale-[1.02] transform transition-all shadow-[0_4px_14px_rgba(201,168,76,0.35)]">
+            <button onClick={() => { if (showAccountForm) resetForm(); else setShowAccountForm(true); }} className="w-full sm:w-auto bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] px-6 py-3 rounded-xl font-extrabold flex justify-center items-center gap-2 hover:scale-[1.02] transform transition-all shadow-[0_4px_14px_rgba(201,168,76,0.35)]">
               {showAccountForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
               {showAccountForm ? 'Cancel Form' : 'Add New Account'}
             </button>
@@ -87,9 +167,9 @@ export default function AccountsPage() {
             <div className="bg-[#131929] rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-[rgba(201,168,76,0.18)] overflow-hidden animate-in slide-in-from-top-4 duration-300 pb-2">
                <div className="p-6 border-b border-[rgba(255,255,255,0.06)] bg-[#1a2235]/40 flex items-center gap-3">
                   <div className="p-2 bg-[rgba(201,168,76,0.1)] rounded-lg border border-[rgba(201,168,76,0.18)]">
-                     <Wallet className="w-5 h-5 text-[#c9a84c]" />
+                     <FileText className="w-5 h-5 text-[#c9a84c]" />
                   </div>
-                  <h3 className="font-black text-[#e8eaf0] text-lg uppercase tracking-wider">New Account Details</h3>
+                  <h3 className="font-black text-[#e8eaf0] text-lg uppercase tracking-wider">{editingId ? 'Edit Account' : 'New Account Details'}</h3>
                </div>
                
                <form onSubmit={handleAccountSubmit} className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 relative">
@@ -159,8 +239,13 @@ export default function AccountsPage() {
                      </div>
                   )}
 
-                  <div className="md:col-span-2 flex justify-end pt-6 border-t border-[rgba(255,255,255,0.06)] mt-2">
-                     <button type="submit" className={`${C.buttonPrimary} w-full sm:w-auto`}>Save Account Securely</button>
+                  <div className="md:col-span-2 flex justify-end gap-3 pt-6 border-t border-[rgba(255,255,255,0.06)] mt-2">
+                     {editingId && (
+                       <button type="button" onClick={resetForm} className="px-6 py-3.5 rounded-xl border border-white/10 text-[#8a95a8] font-bold text-xs uppercase tracking-widest hover:bg-white/5 transition-colors">
+                         Discard Changes
+                       </button>
+                     )}
+                     <button type="submit" className={`${C.buttonPrimary} w-full sm:w-auto`}>{editingId ? 'Update Account' : 'Save Account Securely'}</button>
                   </div>
                </form>
             </div>
@@ -168,7 +253,11 @@ export default function AccountsPage() {
 
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {internalAccounts.map(acc => (
-               <div key={acc.id} className="bg-[#131929] rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[rgba(201,168,76,0.18)] flex flex-col relative overflow-hidden group hover:border-[rgba(201,168,76,0.4)] transition-colors hover:-translate-y-1 duration-300">
+               <div 
+                 key={acc.id} 
+                 onClick={() => setViewingAccount(acc)}
+                 className="bg-[#131929] rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[rgba(201,168,76,0.18)] flex flex-col relative overflow-hidden group hover:border-[rgba(201,168,76,0.4)] transition-colors hover:-translate-y-1 duration-300 cursor-pointer"
+               >
                   {/* Decorative Background Element */}
                   <div className={`absolute -right-10 -top-10 w-40 h-40 rounded-full opacity-[0.03] transition-transform duration-500 group-hover:scale-[1.8] group-hover:opacity-10 pointer-events-none ${acc.account_type === 'wallet' ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
                   
@@ -176,9 +265,22 @@ export default function AccountsPage() {
                      <div className={`p-4 rounded-2xl border shadow-inner ${acc.account_type === 'wallet' ? 'bg-[rgba(52,211,153,0.05)] text-emerald-400 border-[rgba(52,211,153,0.2)]' : 'bg-[rgba(96,165,250,0.05)] text-blue-400 border-[rgba(96,165,250,0.2)]'}`}>
                         {acc.account_type === 'wallet' ? <Wallet className="w-8 h-8" /> : <Building2 className="w-8 h-8" />}
                      </div>
-                     <button onClick={() => handleDelete('internal_accounts', acc.id)} className="p-2.5 text-[#4a5568] hover:text-red-500 bg-[#1a2235] hover:bg-[rgba(244,63,94,0.1)] rounded-xl transition-colors border border-[rgba(255,255,255,0.06)] hover:border-[rgba(244,63,94,0.2)]">
-                        <Trash2 className="w-5 h-5" />
-                     </button>
+                     <div className="flex gap-2">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleEdit(acc); }} 
+                          className="p-2.5 text-[#8a95a8] hover:text-[#c9a84c] bg-[#1a2235] rounded-xl transition-colors border border-white/5" 
+                          title="Edit Account"
+                        >
+                           <Pencil className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete('internal_accounts', acc.id); }} 
+                          className="p-2.5 text-[#4a5568] hover:text-red-500 bg-[#1a2235] hover:bg-[rgba(244,63,94,0.1)] rounded-xl transition-colors border border-[rgba(255,255,255,0.06)] hover:border-[rgba(244,63,94,0.2)]" 
+                          title="Delete Account"
+                        >
+                           <Trash2 className="w-5 h-5" />
+                        </button>
+                     </div>
                   </div>
                   
                   <div className="relative z-10 flex flex-col h-full">

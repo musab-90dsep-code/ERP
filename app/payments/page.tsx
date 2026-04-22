@@ -951,10 +951,13 @@ function PaymentsContent() {
                                           </td>
                                           <td className="px-6 py-4 text-right">
                                              <div className="flex justify-end gap-1.5">
-                                                <button onClick={() => setViewPayment(p)} className="text-[#8a95a8] hover:text-[#c9a84c] p-2 rounded-lg hover:bg-[rgba(201,168,76,0.1)] transition-colors border border-transparent hover:border-[rgba(201,168,76,0.18)]" title="View Details">
-                                                   <Eye className="w-5 h-5" />
+                                                <button 
+                                                  onClick={(e) => { e.stopPropagation(); handleDelete(p.id, p); }} 
+                                                  className="text-[#8a95a8] hover:text-red-500 p-2 rounded-lg hover:bg-[rgba(244,63,94,0.1)] transition-colors border border-transparent hover:border-[rgba(244,63,94,0.2)]" 
+                                                  title="Delete Payment"
+                                                >
+                                                   <Trash2 className="w-5 h-5" />
                                                 </button>
-                                                <button onClick={() => handleDelete(p.id, p)} className="text-[#8a95a8] hover:text-red-500 p-2 rounded-lg hover:bg-[rgba(244,63,94,0.1)] transition-colors border border-transparent hover:border-[rgba(244,63,94,0.2)]" title="Delete Payment"><Trash2 className="w-5 h-5" /></button>
                                              </div>
                                           </td>
                                        </tr>

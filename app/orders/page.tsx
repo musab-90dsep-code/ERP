@@ -23,6 +23,7 @@ type Order = {
   id: string;
   order_no: string;
   type: 'sales' | 'purchase';
+  is_return?: boolean;
   contact_id: string | null;
   contact_name: string;
   items: OrderItem[];
@@ -68,6 +69,7 @@ function OrdersContent() {
     contact_name: '',
     status: 'pending' as Order['status'],
     date: new Date().toISOString().slice(0, 10),
+    is_return: false,
   };
   const [formData, setFormData] = useState(emptyForm);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -175,6 +177,7 @@ function OrdersContent() {
         total: orderTotal,
         status: formData.status,
         date: formData.date,
+        is_return: isSales ? formData.is_return : false,
       };
 
       if (editingId) {
@@ -206,6 +209,7 @@ function OrdersContent() {
       contact_name: order.contact_name ?? '',
       status: order.status,
       date: order.date,
+      is_return: order.is_return || false,
     });
     setOrderItems(order.items ?? []);
     setEditingId(order.id);
@@ -245,7 +249,10 @@ function OrdersContent() {
 
   // ── generate invoice from order ──
   const generateInvoice = (order: Order) => {
-    const invoiceTab = order.type === 'sales' ? 'sell' : 'buy';
+    let invoiceTab = order.type === 'sales' ? 'sell' : 'buy';
+    if (order.type === 'sales' && order.is_return) {
+      invoiceTab = 'exchange';
+    }
     const payload = {
       contact_id: (order as any).contact || order.contact_id || '',
       contact_name: order.contact_name ?? '',
@@ -469,6 +476,24 @@ function OrdersContent() {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
+            
+            {/* Is Return (Sales Only) */}
+            {isSales && (
+              <div className="sm:col-span-1 md:col-span-3">
+                <label className="flex items-center gap-3 cursor-pointer p-4 bg-[#1a2235] rounded-xl border border-[rgba(255,255,255,0.04)] w-max">
+                  <input 
+                    type="checkbox" 
+                    checked={formData.is_return} 
+                    onChange={e => setFormData({ ...formData, is_return: e.target.checked })} 
+                    className="w-5 h-5 accent-[#c9a84c] rounded bg-[#131929]" 
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-white uppercase tracking-wide">Is Return Order?</span>
+                    <span className="text-[10px] text-[#8a95a8] mt-0.5 uppercase tracking-widest">Mark as Sales Return</span>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* ── Add Product Row ── */}
@@ -662,9 +687,14 @@ function OrdersContent() {
               ) : filtered.map(order => (
                 <tr key={order.id} className="hover:bg-[rgba(255,255,255,0.02)] transition-colors group">
                   <td className="px-6 py-4">
-                    <span className="font-mono text-xs font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-1 rounded">
+                    <span className="font-mono text-xs font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-1 rounded block w-max">
                       {order.order_no}
                     </span>
+                    {order.is_return && (
+                      <span className="inline-block mt-2 font-mono text-[9px] font-black text-red-400 bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest">
+                        Return
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 font-bold text-[#e8eaf0] text-sm">{order.contact_name || '—'}</td>
                   <td className="px-6 py-4">
@@ -720,6 +750,11 @@ function OrdersContent() {
                         <span className="font-mono text-[10px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded block w-max mb-1">
                           {order.order_no}
                         </span>
+                        {order.is_return && (
+                          <span className="inline-block mb-1 font-mono text-[9px] font-black text-red-400 bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] px-1.5 py-0.5 rounded uppercase tracking-widest">
+                            Return
+                          </span>
+                        )}
                         <span className="font-bold text-[#e8eaf0] text-sm block">{order.contact_name || 'Unknown Contact'}</span>
                      </div>
                      <div className="text-right">
