@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { Plus, Trash2, Mail, FileText, Upload, User, Eye, Pencil, X, Search, Briefcase, Phone, DollarSign, DownloadCloud, Calendar, MessageSquare, MapPin, Hash, LayoutGrid, List, CheckCircle, Clock, ChevronDown } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 
 interface EmployeeTabProps {
   employees: any[];
@@ -11,6 +12,12 @@ interface EmployeeTabProps {
 }
 
 export default function EmployeeTab({ employees, fetchEmployees, handleDelete }: EmployeeTabProps) {
+  const { user } = useAuth();
+  const role = user?.role || 'member';
+  const canAdd = role === 'admin';
+  const canEdit = role === 'admin';
+  const canDelete = role === 'admin';
+
   const [showForm, setShowForm] = useState(false);
 
   const handleDownloadAll = () => {
@@ -337,9 +344,11 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
           <button onClick={handleDownloadAll} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] text-sm font-extrabold shadow-sm transition hover:bg-[rgba(255,255,255,0.1)]">
             <DownloadCloud className="w-4 h-4" /> Download All
           </button>
-          <button onClick={() => { resetEmpForm(); setShowForm(true); }} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] text-sm font-extrabold shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition hover:opacity-90">
-            <Plus className="w-4 h-4" /> Add Employee
-          </button>
+          {canAdd && (
+             <button onClick={() => { resetEmpForm(); setShowForm(true); }} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] text-sm font-extrabold shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition hover:opacity-90">
+               <Plus className="w-4 h-4" /> Add Employee
+             </button>
+          )}
         </div>
       </div>
 
@@ -675,12 +684,16 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex gap-1.5 items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors border border-transparent hover:border-[#c9a84c]/20" title="Edit">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={(event) => { event.stopPropagation(); if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-2 text-[#8a95a8] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors border border-transparent hover:border-red-400/20" title="Delete">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canEdit && (
+                           <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors border border-transparent hover:border-[#c9a84c]/20" title="Edit">
+                             <Pencil className="w-4 h-4" />
+                           </button>
+                        )}
+                        {canDelete && (
+                           <button onClick={(event) => { event.stopPropagation(); if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-2 text-[#8a95a8] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors border border-transparent hover:border-red-400/20" title="Delete">
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -701,12 +714,16 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                   
                   {/* Actions */}
                   <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                     <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1.5 text-[#8a95a8] hover:text-[#c9a84c] bg-[#131929] rounded transition-colors border border-[rgba(255,255,255,0.05)] shadow-sm" title="Edit">
-                       <Pencil className="w-3.5 h-3.5" />
-                     </button>
-                     <button onClick={(event) => { event.stopPropagation(); if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-1.5 text-[#8a95a8] hover:text-red-400 bg-[#131929] rounded transition-colors border border-[rgba(255,255,255,0.05)] shadow-sm" title="Delete">
-                       <Trash2 className="w-3.5 h-3.5" />
-                     </button>
+                     {canEdit && (
+                        <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1.5 text-[#8a95a8] hover:text-[#c9a84c] bg-[#131929] rounded transition-colors border border-[rgba(255,255,255,0.05)] shadow-sm" title="Edit">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                     )}
+                     {canDelete && (
+                        <button onClick={(event) => { event.stopPropagation(); if(window.confirm('Are you sure you want to remove this employee?')) handleDelete('employees', e.id); }} className="p-1.5 text-[#8a95a8] hover:text-red-400 bg-[#131929] rounded transition-colors border border-[rgba(255,255,255,0.05)] shadow-sm" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                     )}
                   </div>
                </div>
 

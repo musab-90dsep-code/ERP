@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Plus, Trash2, Banknote, ArrowUpRight, ArrowDownLeft, Store, Users, UserCheck, Calendar, CheckCircle2, X, Wallet, Building2, Ticket, Eye, Info, PenTool, ArrowRightLeft, Receipt } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 
 type PaymentType = 'in' | 'out' | 'add_money'; // in = Received (Customers), out = Paid (Suppliers/Processors), add_money = Business Capital
 type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'bank_to_bank_transfer' | 'cheque';
@@ -20,6 +21,11 @@ function PaymentsContent() {
    const router = useRouter();
    const searchParams = useSearchParams();
    const initTab = (searchParams.get('tab') as PaymentType) || 'in';
+
+   const { user } = useAuth();
+   const role = user?.role || 'member';
+   const canAdd = role === 'admin' || role === 'manager';
+   const canDelete = role === 'admin';
 
    const [activeTab, setActiveTab] = useState<PaymentType>(initTab);
    const [showBuilder, setShowBuilder] = useState(false);
@@ -273,6 +279,7 @@ function PaymentsContent() {
    };
 
    const handleDelete = async (id: string, _paymentDetails: any) => {
+      if (!canDelete) { alert("You don't have permission to delete."); return; }
       if (!window.confirm('Delete this payment? This cannot be undone.')) return;
       try {
          await api.deletePayment(id);
@@ -703,10 +710,12 @@ function PaymentsContent() {
                      </button>
                   </div>
 
-                  <button onClick={() => { resetForm(); setShowBuilder(true); }} className="bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] px-5 py-2.5 rounded-xl font-extrabold flex justify-center items-center gap-2 transition-all shadow-[0_4px_14px_rgba(201,168,76,0.35)] hover:scale-[1.02]">
-                     <Plus className="w-4 h-4" />
-                     Add Record
-                  </button>
+                  {canAdd && (
+                     <button onClick={() => { resetForm(); setShowBuilder(true); }} className="bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] px-5 py-2.5 rounded-xl font-extrabold flex justify-center items-center gap-2 transition-all shadow-[0_4px_14px_rgba(201,168,76,0.35)] hover:scale-[1.02]">
+                        <Plus className="w-4 h-4" />
+                        Add Record
+                     </button>
+                  )}
                </div>
             )}
          </div>
@@ -951,13 +960,15 @@ function PaymentsContent() {
                                           </td>
                                           <td className="px-6 py-4 text-right">
                                              <div className="flex justify-end gap-1.5">
-                                                <button 
-                                                  onClick={(e) => { e.stopPropagation(); handleDelete(p.id, p); }} 
-                                                  className="text-[#8a95a8] hover:text-red-500 p-2 rounded-lg hover:bg-[rgba(244,63,94,0.1)] transition-colors border border-transparent hover:border-[rgba(244,63,94,0.2)]" 
-                                                  title="Delete Payment"
-                                                >
-                                                   <Trash2 className="w-5 h-5" />
-                                                </button>
+                                                {canDelete && (
+                                                   <button 
+                                                     onClick={(e) => { e.stopPropagation(); handleDelete(p.id, p); }} 
+                                                     className="text-[#8a95a8] hover:text-red-500 p-2 rounded-lg hover:bg-[rgba(244,63,94,0.1)] transition-colors border border-transparent hover:border-[rgba(244,63,94,0.2)]" 
+                                                     title="Delete Payment"
+                                                   >
+                                                      <Trash2 className="w-5 h-5" />
+                                                   </button>
+                                                )}
                                              </div>
                                           </td>
                                        </tr>

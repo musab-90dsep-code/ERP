@@ -85,7 +85,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { signOut } = useAuth();
+  const { user, setRole, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -303,6 +303,22 @@ export function Sidebar() {
               </div>
             )}
           </button>
+        )}
+
+        {/* Role Switcher for Testing */}
+        {user && (
+          <div className={`w-full ${minimized ? 'hidden' : 'block'} mb-2 mt-2 px-3`}>
+            <label className="text-[10px] uppercase font-bold text-[#8a95a8] mb-1 block">Test Role:</label>
+            <select 
+              value={user.role} 
+              onChange={(e) => setRole(e.target.value as 'admin'|'manager'|'member')}
+              className="w-full bg-[#1a2035] border border-[#c9a84c]/20 rounded-md text-xs text-[#e0c070] py-1.5 px-2 outline-none focus:border-[#c9a84c]/50"
+            >
+              <option value="admin">Admin</option>
+              <option value="manager">Manager</option>
+              <option value="member">Member</option>
+            </select>
+          </div>
         )}
 
         <button

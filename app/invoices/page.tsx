@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Plus, Trash2, FileText, ShoppingCart, ArrowLeftRight, Calculator, CreditCard, PenTool, CheckCircle, PackageSearch, Banknote, Building2, Wallet, Eye, X, Printer } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 
 type InvoiceType = 'buy' | 'sell' | 'return' | 'exchange';
 type PaymentMethod = 'cash' | 'bikash' | 'nagad' | 'rocket' | 'upay' | 'bank_transfer' | 'bank_to_bank_transfer' | 'cheque';
@@ -23,6 +24,11 @@ function InvoicesContent() {
    const router = useRouter();
    const searchParams = useSearchParams();
    const initTab = (searchParams.get('tab') as InvoiceType) || 'buy';
+
+   const { user } = useAuth();
+   const role = user?.role || 'member';
+   const canAdd = role === 'admin' || role === 'manager';
+   const canDelete = role === 'admin';
 
    const [activeTab, setActiveTab] = useState<InvoiceType>(initTab);
    const [showBuilder, setShowBuilder] = useState(false);
@@ -368,6 +374,7 @@ function InvoicesContent() {
    };
 
    const handleDelete = async (id: string) => {
+      if (!canDelete) { alert("You don't have permission to delete."); return; }
       if (!window.confirm("Delete this invoice completely?")) return;
       try {
          await api.deleteInvoice(id);
@@ -573,7 +580,7 @@ function InvoicesContent() {
                </p>
             </div>
 
-            {!showBuilder && (
+            {!showBuilder && canAdd && (
                <button onClick={() => { resetForm(); setShowBuilder(true); }}
                   style={{
                      display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10,
@@ -659,14 +666,16 @@ function InvoicesContent() {
                                  {Number(inv.due_amount) > 0 && <div style={{ fontSize: 10, color: N.red, fontWeight: 800, marginTop: 4 }}>Due: ৳ {inv.due_amount}</div>}
                               </td>
                               <td style={{ padding: '13px 20px', textAlign: 'right' }}>
-                                 <div style={{ display: 'inline-flex', gap: 4 }}>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(inv.id); }} title="Delete"
-                                       style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,.3)', transition: 'all .12s' }}
-                                       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,.1)'; e.currentTarget.style.color = N.red; }}
-                                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,.3)'; }}>
-                                       <Trash2 style={{ width: 15, height: 15 }} />
-                                    </button>
-                                 </div>
+                                 {canDelete && (
+                                    <div style={{ display: 'inline-flex', gap: 4 }}>
+                                       <button onClick={(e) => { e.stopPropagation(); handleDelete(inv.id); }} title="Delete"
+                                          style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,.3)', transition: 'all .12s' }}
+                                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,.1)'; e.currentTarget.style.color = N.red; }}
+                                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,.3)'; }}>
+                                          <Trash2 style={{ width: 15, height: 15 }} />
+                                       </button>
+                                    </div>
+                                 )}
                               </td>
                            </tr>
                         ))}

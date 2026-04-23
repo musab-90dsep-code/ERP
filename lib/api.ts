@@ -30,11 +30,17 @@ async function unifiedApiCall<T = any>(
     jsonPayload = Object.fromEntries(data.entries());
   }
 
+  let role = 'member';
+  if (typeof window !== 'undefined') {
+    role = localStorage.getItem('erp_mock_role') || localStorage.getItem('erp_role') || 'member';
+  }
+
   const payload = {
     model,
     action,
     id,
-    data: jsonPayload
+    data: jsonPayload,
+    role
   };
 
   const options: RequestInit = {
