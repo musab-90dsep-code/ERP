@@ -122,6 +122,7 @@ function PaymentsContent() {
    }, [activeTab]);
 
    const fetchInternalAccounts = async () => {
+      if (internalAccounts.length > 0) return;
       try {
          const data = await api.getInternalAccounts({ ordering: 'provider_name' });
          setInternalAccounts(Array.isArray(data) ? data : data.results ?? []);
@@ -129,6 +130,7 @@ function PaymentsContent() {
    };
 
    const fetchEmployees = async () => {
+      if (employees.length > 0) return;
       try {
          const data = await api.getEmployees({ ordering: 'name' });
          setEmployees(Array.isArray(data) ? data : data.results ?? []);
@@ -144,6 +146,8 @@ function PaymentsContent() {
    const fetchContacts = async () => {
       try {
          const targetTypes = activeTab === 'in' ? ['customer'] : ['supplier', 'processor'];
+         // Simple optimization: only fetch if contacts list doesn't match current requirements
+         // Or just always fetch for now but avoid double-calling.
          const results = await Promise.all(targetTypes.map(t => api.getContacts({ type: t })));
          const combined = results.flatMap(r => Array.isArray(r) ? r : r.results ?? []);
          setContacts(combined);
@@ -152,14 +156,14 @@ function PaymentsContent() {
 
    const fetchPayments = async () => {
       try {
-         const data = await api.getPayments({ type: activeTab as 'in' | 'out', ordering: '-created_at' });
+         const data = await api.getPayments({ type: activeTab as 'in' | 'out', ordering: '-created_at', limit: 100 });
          setPayments(Array.isArray(data) ? data : data.results ?? []);
       } catch (err) { console.error('fetchPayments:', err); }
    };
 
    const fetchAddMoney = async () => {
       try {
-         const data = await api.getAddMoney({ ordering: '-created_at' });
+         const data = await api.getAddMoney({ ordering: '-created_at', limit: 100 });
          setAddMoneyList(Array.isArray(data) ? data : data.results ?? []);
       } catch (err) { console.error('fetchAddMoney:', err); }
    };
@@ -173,28 +177,10 @@ function PaymentsContent() {
       const fetchCalculatedDue = async () => {
          setLoadingDue(true);
          try {
-            const [invsRaw, paysRaw] = await Promise.all([
-               api.getInvoices({ contact: form.contact_id }),
-               api.getPayments({ contact: form.contact_id })
-            ]);
-            const invs = Array.isArray(invsRaw) ? invsRaw : invsRaw.results || [];
-            const pays = Array.isArray(paysRaw) ? paysRaw : paysRaw.results || [];
-
-            let due = 0;
-            if (activeTab === 'in') { // Received (Customer Due)
-               const totalSellDue = (invs || []).filter((i: any) => i.type === 'sell').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const totalReturnDue = (invs || []).filter((i: any) => i.type === 'return').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const standalonePaysIn = (pays || []).filter((p: any) => p.type === 'in' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               const standalonePaysOut = (pays || []).filter((p: any) => p.type === 'out' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               due = (totalSellDue - totalReturnDue) - (standalonePaysIn - standalonePaysOut);
-            } else { // Paid (Supplier Due)
-               const totalBuyDue = (invs || []).filter((i: any) => i.type === 'buy').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const totalReturnDue = (invs || []).filter((i: any) => i.type === 'return' && i.purchase_return).reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const standalonePaysOut = (pays || []).filter((p: any) => p.type === 'out' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               const standalonePaysIn = (pays || []).filter((p: any) => p.type === 'in' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               due = (totalBuyDue - totalReturnDue) - (standalonePaysOut - standalonePaysIn);
-            }
-            setSelectedContactDue(due);
+             // OPTIMIZATION: Fetch only the due balance calculated by the backend
+             const contactType = activeTab; // 'in' or 'out'
+             const res = await api.getContactDue(form.contact_id, contactType);
+             setSelectedContactDue(res.due || 0);
          } catch (err) {
             console.error('Failed to fetch due', err);
             setSelectedContactDue(null);

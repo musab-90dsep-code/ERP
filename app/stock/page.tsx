@@ -64,7 +64,8 @@ function StockContent() {
 
   const fetchProducts = async () => {
     try {
-      const data = await api.getProducts({ category });
+      // Limit to 500 products to prevent UI freeze
+      const data = await api.getProducts({ category, limit: 500 });
       let list = Array.isArray(data) ? data : (data.results ?? []);
       list = list.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setProducts(list);
@@ -162,7 +163,8 @@ function StockContent() {
     setHistoryLoading(true);
     setHistoryData([]);
     try {
-      const data = await api.getStockHistory({ item_type: category });
+      // Limit to 200 recent history entries
+      const data = await api.getStockHistory({ item_type: category, limit: 200 });
       setHistoryData(Array.isArray(data) ? data : data.results ?? []);
     } catch { setHistoryData([]); }
     setHistoryLoading(false);

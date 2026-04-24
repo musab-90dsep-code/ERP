@@ -71,61 +71,32 @@ function InvoicesContent() {
    const [submitting, setSubmitting] = useState(false);
    const [previousDue, setPreviousDue] = useState(0);
 
-   useEffect(() => {
-      async function calcDue() {
-         if (!form.contact_id) {
-            setPreviousDue(0);
-            return;
-         }
-         try {
-            const invsRaw = await api.getInvoices({ contact: form.contact_id });
-            const paysRaw = await api.getPayments({ contact: form.contact_id });
-            const invs = Array.isArray(invsRaw) ? invsRaw : invsRaw.results || [];
-            const pays = Array.isArray(paysRaw) ? paysRaw : paysRaw.results || [];
-
-            let due = 0;
-            if (activeTab === 'sell' || activeTab === 'return' || activeTab === 'exchange') {
-               // Customer Ledger
-               const totalSellDue = (invs || []).filter((i: any) => i.type === 'sell').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-
-               // Full return credit (abs of total for exchange/return invoices)
-               const totalReturnCredit = (invs || [])
-                  .filter((i: any) => i.type === 'return' || (i.type === 'exchange' && Number(i.total) < 0))
-                  .reduce((acc: number, i: any) => acc + Math.abs(Number(i.total || 0)), 0);
-
-               // Cash refunds paid out (payments OUT linked to exchange invoices)
-               const exchangeInvoiceIds = new Set((invs || [])
-                  .filter((i: any) => i.type === 'exchange' && Number(i.total) < 0)
-                  .map((i: any) => i.id));
-               const cashRefundsPaid = (pays || [])
-                  .filter((p: any) => p.type === 'out' && p.invoice && exchangeInvoiceIds.has(p.invoice))
-                  .reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-
-               const standalonePaysIn = (pays || []).filter((p: any) => p.type === 'in' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               const standalonePaysOut = (pays || []).filter((p: any) => p.type === 'out' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-
-               // Due = sell due - full return credit - cash refunds - standalone in payments + standalone out payments
-               due = totalSellDue - totalReturnCredit - cashRefundsPaid - (standalonePaysIn - standalonePaysOut);
-            } else if (activeTab === 'buy') {
-               // Supplier Ledger: Sum of all unpaid 'buy' balances minus unpaid returns, minus extra standalone payments
-               const totalBuyDue = (invs || []).filter((i: any) => i.type === 'buy').reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const totalReturnDue = (invs || []).filter((i: any) => i.type === 'return' && i.purchase_return).reduce((acc: number, i: any) => acc + Number(i.due_amount || 0), 0);
-               const standalonePaysOut = (pays || []).filter((p: any) => p.type === 'out' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-               const standalonePaysIn = (pays || []).filter((p: any) => p.type === 'in' && !p.invoice).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-
-               due = (totalBuyDue - totalReturnDue) - (standalonePaysOut - standalonePaysIn);
-            }
-            // Force round to 2 decimals to prevent floating point drift (e.g. 50.300004 -> 50.30)
-            setPreviousDue(Math.round(due * 100) / 100 > 0 ? Math.round(due * 100) / 100 : 0);
-         } catch (e) {
-            setPreviousDue(0);
-         }
-      }
-      calcDue();
-   }, [form.contact_id, activeTab]);
+    useEffect(() => {
+       async function calcDue() {
+          if (!form.contact_id) {
+             setPreviousDue(0);
+             return;
+          }
+          try {
+             // OPTIMIZATION: Fetch only the due balance calculated by the backend instead of thousands of invoices/payments
+             const contactType = (activeTab === 'buy') ? 'supplier' : 'customer';
+             const res = await api.getContactDue(form.contact_id, contactType);
+             let due = res.due || 0;
+             
+             // Force round to 2 decimals to prevent floating point drift (e.g. 50.300004 -> 50.30)
+             setPreviousDue(Math.round(due * 100) / 100 > 0 ? Math.round(due * 100) / 100 : 0);
+          } catch (e) {
+             console.error('calcDue Error:', e);
+             setPreviousDue(0);
+          }
+       }
+       calcDue();
+    }, [form.contact_id, activeTab]);
 
    useEffect(() => {
       fetchInvoices();
+      // Only fetch contacts if they haven't been loaded for this type yet
+      // fetchData logic now handles internal caching
       fetchData();
    }, [activeTab]);
 
@@ -163,25 +134,45 @@ function InvoicesContent() {
       }
    }, [searchParams]);
 
-   const fetchData = async () => {
+   const fetchData = async (forceContacts = false) => {
       try {
          const targetType = (activeTab === 'buy') ? 'supplier' : 'customer';
-         const [pData, cData, eData, accData] = await Promise.all([
-            api.getProducts({}),
-            api.getContacts({ type: targetType }),
-            api.getEmployees({}),
-            api.getInternalAccounts({ ordering: 'provider_name' }),
-         ]);
-         setProducts(Array.isArray(pData) ? pData : pData.results ?? []);
-         setContacts(Array.isArray(cData) ? cData : cData.results ?? []);
-         setEmployees(Array.isArray(eData) ? eData : eData.results ?? []);
-         setInternalAccounts(Array.isArray(accData) ? accData : accData.results ?? []);
+         
+         // Only fetch products, employees, and accounts if they haven't been loaded yet
+         const promises: Promise<any>[] = [];
+         const fetchFlags = { products: false, employees: false, accounts: false, contacts: false };
+
+         if (products.length === 0) {
+            promises.push(api.getProducts({}));
+            fetchFlags.products = true;
+         }
+         if (employees.length === 0) {
+            promises.push(api.getEmployees({}));
+            fetchFlags.employees = true;
+         }
+         if (internalAccounts.length === 0) {
+            promises.push(api.getInternalAccounts({ ordering: 'provider_name' }));
+            fetchFlags.accounts = true;
+         }
+         
+         // Always fetch contacts for the current tab type if it's a new type or forced
+         promises.push(api.getContacts({ type: targetType }));
+         fetchFlags.contacts = true;
+
+         const results = await Promise.all(promises);
+         
+         let resultIdx = 0;
+         if (fetchFlags.products) setProducts(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
+         if (fetchFlags.employees) setEmployees(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
+         if (fetchFlags.accounts) setInternalAccounts(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
+         if (fetchFlags.contacts) setContacts(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
+         
       } catch (err) { console.error('fetchData:', err); }
    };
 
    const fetchInvoices = async () => {
       try {
-         const data = await api.getInvoices({ type: activeTab, ordering: '-created_at' });
+         const data = await api.getInvoices({ type: activeTab, ordering: '-created_at', limit: 100 });
          setInvoices(Array.isArray(data) ? data : data.results ?? []);
       } catch (err) { console.error('fetchInvoices:', err); }
    };

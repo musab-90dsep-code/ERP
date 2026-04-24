@@ -94,6 +94,7 @@ export const api = {
   // ─── CONTACTS ──────────────────────────────────────────────────────────────
   getContacts: (params?: any) => unifiedApiCall('contact', 'list', undefined, params),
   getContact: (id: string) => unifiedApiCall('contact', 'retrieve', id),
+  getContactDue: (id: string, type: string) => unifiedApiCall('contact', 'due', id, { type }),
   createContact: (data: any) => unifiedApiCall('contact', 'create', undefined, data),
   updateContact: (id: string, data: any) => unifiedApiCall('contact', 'update', id, data),
   deleteContact: (id: string) => unifiedApiCall('contact', 'delete', id),
