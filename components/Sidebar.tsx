@@ -174,7 +174,7 @@ export function Sidebar() {
       <div className="flex items-center justify-between pt-5 pb-1 px-4">
         <div className={`flex items-center gap-3 ${minimized ? 'justify-center w-full' : ''}`}>
           <div className="flex items-center justify-center flex-shrink-0 w-16 h-14 overflow-hidden drop-shadow-lg">
-            <img src="/logo.png" alt="LedgerGhor" className="w-full h-full object-contain scale-[3.2]" />
+            <img src="/logo2.png" alt="LedgerGhor" className="w-full h-full object-contain scale-[3.2]" />
           </div>
           {!minimized && (
             <div className="flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300">
