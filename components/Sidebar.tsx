@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard, Package, FileText, Users, Briefcase, CreditCard,
-  LogOut, ChevronDown, Landmark, Settings, Boxes, ReceiptText,
+  LogOut, ChevronDown, Landmark, Boxes, ReceiptText,
   ArrowRightLeft, Building, Factory, Menu, X, Download, CheckCircle, Wallet, ShoppingCart,
   ChevronLeft, ChevronRight, Plus, Store, TrendingUp
 } from 'lucide-react';
@@ -88,13 +88,6 @@ const navItems = [
       { name: 'Pay for Receipt', href: '/expenses?tab=pay' },
     ]
   },
-  {
-    name: 'Settings', basePath: '/settings', icon: Settings, moduleKey: null, // always visible
-    subItems: [
-      { name: 'Add Dokan', href: '/settings?action=add' },
-      { name: 'Dokan Poriborton', href: '/settings?action=switch' },
-    ]
-  },
 ];
 
 export function Sidebar() {
@@ -138,7 +131,6 @@ export function Sidebar() {
       // unchanged items
       Inventory: pathname.startsWith('/stock'),
       'Daily Expenses': pathname.startsWith('/expenses'),
-      Settings: pathname.startsWith('/settings'),
     });
   }, []);
 
