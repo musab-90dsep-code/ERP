@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import { Sidebar } from '@/components/Sidebar';
 import { AuthProvider } from '@/components/AuthProvider';
 import { InstallPrompt } from '@/components/InstallPrompt';
+import { SplashScreen } from '@/components/SplashScreen';
 import './globals.css';
 
 const inter = Inter({
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         style={{ background: '#0b0f1a' }}
         suppressHydrationWarning
       >
+        <SplashScreen />
         <AuthProvider>
           <InstallPrompt />
 

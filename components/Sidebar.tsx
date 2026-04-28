@@ -7,85 +7,107 @@ import {
   LayoutDashboard, Package, FileText, Users, Briefcase, CreditCard,
   LogOut, ChevronDown, Landmark, Settings, Boxes, ReceiptText,
   ArrowRightLeft, Building, Factory, Menu, X, Download, CheckCircle, Wallet, ShoppingCart,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Plus, Store, TrendingUp
 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useIsMobile } from '@/hooks/use-mobile';
+import api from '@/lib/api';
 
 const navItems = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  // ── Dashboard (always visible) ─────────────────────────────────────────────
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard, moduleKey: 'dashboard' },
+
+  // ── Inventory ──────────────────────────────────────────────────────────────
   {
-    name: 'Inventory', basePath: '/stock', icon: Boxes,
+    name: 'Inventory', basePath: '/stock', icon: Boxes, moduleKey: 'inventory',
     subItems: [
       { name: 'Raw Materials', href: '/stock?tab=raw-materials' },
       { name: 'Finished Goods', href: '/stock?tab=finished-goods' },
     ]
   },
+
+  // ── Sales ──────────────────────────────────────────────────────────────────
   {
-    name: 'Invoices', basePath: '/invoices', icon: ReceiptText,
+    name: 'Sales', icon: TrendingUp, moduleKey: 'sales',
     subItems: [
-      { name: 'Buy Invoices', href: '/invoices?tab=buy' },
-      { name: 'Sell Invoices', href: '/invoices?tab=sell' },
-      { name: 'Sells Returns', href: '/invoices?tab=exchange' },
+      { name: 'Customer', href: '/contacts/customers' },
+      { name: 'Sales Order', href: '/orders?tab=sales' },
+      { name: 'Sales Invoices', href: '/invoices?tab=sell' },
+      { name: 'Returns', href: '/invoices?tab=exchange' },
+      { name: 'Receive Payment', href: '/payments?tab=in' },
     ]
   },
+
+  // ── Purchase ───────────────────────────────────────────────────────────────
   {
-    name: 'Contacts', basePath: '/contacts', icon: Users,
+    name: 'Purchase', icon: ShoppingCart, moduleKey: 'purchase',
     subItems: [
-      { name: 'Customers', href: '/contacts/customers' },
       { name: 'Suppliers', href: '/contacts/suppliers' },
-      { name: 'Processors', href: '/contacts/processors' },
+      { name: 'Purchase Order', href: '/orders?tab=purchase' },
+      { name: 'Purchase Invoice', href: '/invoices?tab=buy' },
+      { name: 'Transfer Payment', href: '/payments?tab=out' },
     ]
   },
+
+  // ── Manufacturing ──────────────────────────────────────────────────────────
   {
-    name: 'Employees', basePath: '/employees', icon: Briefcase,
+    name: 'Manufacturing', basePath: '/processing', icon: Factory, moduleKey: 'processing',
+    subItems: [
+      { name: 'Manufacturer', href: '/contacts/processors' },
+      { name: 'Material Issue', href: '/processing?tab=issued' },
+      { name: 'Material Receive', href: '/processing?tab=received' },
+    ]
+  },
+
+
+  // ── Account and Financ ───────────────────────────────────────────────────
+  {
+    name: 'Account and Financ', icon: Landmark, moduleKey: 'finance',
+    subItems: [
+      { name: 'Account', href: '/accounts' },
+      { name: 'Financ', href: '/finance' },
+      { name: 'Add Money', href: '/payments?tab=add_money' },
+    ]
+  },
+
+  // ── Employees ───────────────────────────────────────────────────────────────
+  {
+    name: 'Employees', basePath: '/employees', icon: Briefcase, moduleKey: 'employees',
     subItems: [
       { name: 'Employee List', href: '/employees/list' },
       { name: 'Attendance', href: '/employees/attendance' },
-      { name: 'Pay Salary', href: '/employees/transactions' },
+      { name: 'Payroll', href: '/employees/transactions' },
     ]
   },
+
+  // ── Daily Expenses ──────────────────────────────────────────────────────────
   {
-    name: 'Orders', basePath: '/orders', icon: ShoppingCart,
-    subItems: [
-      { name: 'Sales Orders', href: '/orders?tab=sales' },
-      { name: 'Purchase Orders', href: '/orders?tab=purchase' },
-    ]
-  },
-  {
-    name: 'Processing', basePath: '/processing', icon: Settings,
-    subItems: [
-      { name: 'Material Issued', href: '/processing?tab=issued' },
-      { name: 'Material Received', href: '/processing?tab=received' },
-    ]
-  },
-  {
-    name: 'Daily Expenses', basePath: '/expenses', icon: ReceiptText,
+    name: 'Daily Expenses', basePath: '/expenses', icon: ReceiptText, moduleKey: 'expenses',
     subItems: [
       { name: 'Make a Receipt', href: '/expenses?tab=make' },
       { name: 'Pay for Receipt', href: '/expenses?tab=pay' },
     ]
   },
   {
-    name: 'Payments', basePath: '/payments', icon: CreditCard,
+    name: 'Settings', basePath: '/settings', icon: Settings, moduleKey: null, // always visible
     subItems: [
-      { name: 'Received', href: '/payments?tab=in' },
-      { name: 'Paid', href: '/payments?tab=out' },
-      { name: 'Add Money', href: '/payments?tab=add_money' },
+      { name: 'Add Dokan', href: '/settings?action=add' },
+      { name: 'Dokan Poriborton', href: '/settings?action=switch' },
     ]
-  },
-  {
-    name: 'Accounts', href: '/accounts', icon: Wallet
-  },
-  {
-    name: 'Finance', href: '/finance', icon: Landmark
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, setRole, signOut } = useAuth();
+  const { user, setRole, signOut, activeShopId, activeShop, setActiveShopId, shops, refreshShops } = useAuth();
+
+  // Filter nav items based on active shop's enabled modules (null moduleKey = always visible)
+  const filteredNavItems = navItems.filter(item =>
+    item.moduleKey === null ||
+    !activeShop?.modules?.length ||
+    activeShop.modules.includes(item.moduleKey)
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -97,20 +119,26 @@ export function Sidebar() {
   const isMobile = useIsMobile();
   const minimized = !isMobile && isMinimized;
 
-  useEffect(() => { setMobileOpen(false); }, [pathname, searchParams]);
+  useEffect(() => { setMobileOpen(false); }, [pathname, searchParams, activeShopId]);
   useEffect(() => { if (!isMobile) setMobileOpen(false); }, [isMobile]);
 
   useEffect(() => {
-    // Initial dropdown state based on current path
+    // Initial dropdown open-state based on current URL
+    // Sales & Purchase share /invoices and /orders paths — open both if on those routes
+    const onInvoices = pathname.startsWith('/invoices');
+    const onOrders = pathname.startsWith('/orders');
+    const onProcessing = pathname.startsWith('/processing');
     setOpenDropdowns({
-      Inventory: pathname.startsWith('/stock'),
-      Invoices: pathname.startsWith('/invoices'),
+      Sales: onInvoices || onOrders,
+      Purchase: onOrders || onInvoices,
+      Manufacturing: onProcessing,
       Contacts: pathname.startsWith('/contacts'),
-      Employees: pathname.startsWith('/employees'),
-      Orders: pathname.startsWith('/orders'),
-      Processing: pathname.startsWith('/processing'),
-      Expenses: pathname.startsWith('/expenses'),
       Payments: pathname.startsWith('/payments'),
+      Employees: pathname.startsWith('/employees'),
+      // unchanged items
+      Inventory: pathname.startsWith('/stock'),
+      'Daily Expenses': pathname.startsWith('/expenses'),
+      Settings: pathname.startsWith('/settings'),
     });
   }, []);
 
@@ -207,8 +235,8 @@ export function Sidebar() {
       </div>
 
       {/* ── Navigation ── */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar">
-        {navItems.map((item) => {
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar mt-2">
+        {filteredNavItems.map((item) => {
           const Icon = item.icon;
           const hasSubItems = !!item.subItems;
           const isOpen = openDropdowns[item.name] || false;
@@ -309,9 +337,9 @@ export function Sidebar() {
         {user && (
           <div className={`w-full ${minimized ? 'hidden' : 'block'} mb-2 mt-2 px-3`}>
             <label className="text-[10px] uppercase font-bold text-[#8a95a8] mb-1 block">Test Role:</label>
-            <select 
-              value={user.role} 
-              onChange={(e) => setRole(e.target.value as 'admin'|'manager'|'member')}
+            <select
+              value={user.role}
+              onChange={(e) => setRole(e.target.value as 'admin' | 'manager' | 'member')}
               className="w-full bg-[#1a2035] border border-[#c9a84c]/20 rounded-md text-xs text-[#e0c070] py-1.5 px-2 outline-none focus:border-[#c9a84c]/50"
             >
               <option value="admin">Admin</option>

@@ -35,12 +35,18 @@ async function unifiedApiCall<T = any>(
     role = localStorage.getItem('erp_mock_role') || localStorage.getItem('erp_role') || 'member';
   }
 
+  let shop_id = null;
+  if (typeof window !== 'undefined') {
+    shop_id = localStorage.getItem('erp_active_shop_id');
+  }
+
   const payload = {
     model,
     action,
     id,
     data: jsonPayload,
-    role
+    role,
+    shop_id
   };
 
   const options: RequestInit = {
@@ -181,6 +187,11 @@ export const api = {
     if (model === 'processing-order') model = 'processing_order';
     return unifiedApiCall(model, 'delete', id);
   },
+
+  // ─── SHOPS ──────────────────────────────────────────────────────────────
+  getShops: () => unifiedApiCall('shop', 'list'),
+  createShop: (data: any) => unifiedApiCall('shop', 'create', undefined, data),
+  deleteShop: (id: string) => unifiedApiCall('shop', 'delete', id),
 
   // ─── FILE UPLOAD (নতুন যোগ করা হলো) ───────────────────────────────────────
   uploadFile: async (file: File): Promise<string> => {

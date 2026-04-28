@@ -17,6 +17,7 @@ type OrderItem = {
   unit_price: number;
   subtotal: number;
   selected_head?: string;
+  quality?: string;
 };
 
 type Order = {
@@ -74,7 +75,7 @@ function OrdersContent() {
   const [formData, setFormData] = useState(emptyForm);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [itemForm, setItemForm] = useState<any>({
-    product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '',
+    product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', quality: '',
   });
 
   // ── fetch ──
@@ -130,7 +131,7 @@ function OrdersContent() {
 
     const subtotal = itemForm.quantity * itemForm.unit_price;
     setOrderItems(prev => [...prev, { ...itemForm, subtotal }]);
-    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', selected_head: '' });
+    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', selected_head: '', quality: '' });
   };
 
   const removeItem = (idx: number) =>
@@ -152,6 +153,7 @@ function OrdersContent() {
       unit: p.unit || 'pcs',
       unit_price: autoPrice,
       selected_head: '',
+      quality: p.product_quality || '',
     }));
   };
 
@@ -200,7 +202,7 @@ function OrdersContent() {
     setEditingId(null);
     setFormData(emptyForm);
     setOrderItems([]);
-    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', selected_head: '' });
+    setItemForm({ product_id: '', product_name: '', quantity: 1, unit: '', unit_price: '', selected_head: '', quality: '' });
   };
 
   const handleEdit = (order: Order) => {
@@ -262,6 +264,7 @@ function OrdersContent() {
         quantity: i.quantity,
         price: i.unit_price,
         selected_head: i.selected_head || '',
+        quality: i.quality || '',
       })),
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
@@ -338,7 +341,10 @@ function OrdersContent() {
                           <div>
                               <p className="font-bold text-[#e8eaf0] text-sm">{item.product_name}</p>
                               {item.selected_head && (
-                                <span className="inline-block text-[9px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] rounded px-1.5 py-0.5 mt-1 uppercase tracking-widest">{item.selected_head}</span>
+                                <span className="inline-block text-[9px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] rounded px-1.5 py-0.5 mt-1 uppercase tracking-widest mr-1.5">{item.selected_head}</span>
+                              )}
+                              {item.quality && (
+                                <span className="inline-block text-[9px] font-black text-[#60a5fa] bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] rounded px-1.5 py-0.5 mt-1 uppercase tracking-widest">{item.quality}</span>
                               )}
                               <p className="text-[10px] text-[#8a95a8] font-bold uppercase tracking-wider mt-1.5">
                                 Unit: <span className="text-[#e8eaf0]">৳{item.unit_price}</span> <span className="mx-1">·</span> Sub: <span className="text-[#e8eaf0]">৳{item.subtotal?.toFixed(2)}</span>
@@ -501,7 +507,7 @@ function OrdersContent() {
             <p className="text-[10px] font-black text-[#8a95a8] uppercase tracking-widest mb-4 flex items-center gap-2">
               <Package className="w-3.5 h-3.5 text-[#c9a84c]" /> Add Product Items
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
               <div className={selectedProductHeads.length > 0 ? 'sm:col-span-1' : 'sm:col-span-2'}>
                 <label className={labelClass}>Product</label>
                 <select
@@ -530,6 +536,23 @@ function OrdersContent() {
                   </select>
                 </div>
               )}
+              <div className="sm:col-span-1">
+                <label className={labelClass}>Quality</label>
+                <select
+                  value={itemForm.quality || ''}
+                  onChange={e => setItemForm({ ...itemForm, quality: e.target.value })}
+                  className={inputClass}
+                >
+                  <option value="">— Select Quality —</option>
+                  <option value="Light Series">Light Series</option>
+                  <option value="Medium Series">Medium Series</option>
+                  <option value="AC Series">AC Series</option>
+                  <option value="Essential Series">Essential Series</option>
+                  <option value="Classic Series">Classic Series</option>
+                  <option value="Signature Series">Signature Series</option>
+                  <option value="Elite Series">Elite Series</option>
+                </select>
+              </div>
               <div>
                 <label className={labelClass}>Quantity</label>
                 <input
@@ -565,7 +588,8 @@ function OrdersContent() {
                 {orderItems.map((item, idx) => (
                    <div key={idx} className="bg-[#131929] border border-[rgba(255,255,255,0.05)] rounded-lg p-3 relative pr-10">
                       <p className="font-bold text-sm text-[#e8eaf0]">{item.product_name}</p>
-                      {item.selected_head && <span className="inline-block mt-1 text-[9px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] rounded px-1.5 py-0.5 uppercase tracking-widest">{item.selected_head}</span>}
+                      {item.selected_head && <span className="inline-block mt-1 text-[9px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] rounded px-1.5 py-0.5 uppercase tracking-widest mr-1.5">{item.selected_head}</span>}
+                      {item.quality && <span className="inline-block mt-1 text-[9px] font-black text-[#60a5fa] bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] rounded px-1.5 py-0.5 uppercase tracking-widest">{item.quality}</span>}
                       <div className="flex justify-between items-center mt-2 text-xs font-bold text-[#8a95a8]">
                          <span>{item.quantity} {item.unit} × ৳{item.unit_price}</span>
                          <span className="text-[#c9a84c]">৳{item.subtotal.toFixed(2)}</span>
@@ -590,6 +614,7 @@ function OrdersContent() {
                     <tr>
                       <th className="px-4 py-3 text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Product</th>
                       <th className="px-4 py-3 text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Variant</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Quality</th>
                       <th className="px-4 py-3 text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Qty</th>
                       <th className="px-4 py-3 text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Unit Price</th>
                       <th className="px-4 py-3 text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Subtotal</th>
@@ -605,6 +630,11 @@ function OrdersContent() {
                             ? <span className="text-[9px] font-black text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] rounded px-1.5 py-0.5 uppercase tracking-widest">{item.selected_head}</span>
                             : <span className="text-[#4a5568] text-xs font-bold">—</span>}
                         </td>
+                        <td className="px-4 py-3">
+                          {item.quality
+                            ? <span className="text-[9px] font-black text-[#60a5fa] bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)] rounded px-1.5 py-0.5 uppercase tracking-widest">{item.quality}</span>
+                            : <span className="text-[#4a5568] text-xs font-bold">—</span>}
+                        </td>
                         <td className="px-4 py-3 text-xs font-bold text-[#8a95a8]">{item.quantity} <span className="text-[10px] uppercase tracking-widest opacity-70">{item.unit}</span></td>
                         <td className="px-4 py-3 text-xs font-bold text-[#8a95a8]">৳{item.unit_price}</td>
                         <td className="px-4 py-3 font-black text-[#e8eaf0] text-sm">৳{item.subtotal.toFixed(2)}</td>
@@ -618,7 +648,7 @@ function OrdersContent() {
                   </tbody>
                   <tfoot className="bg-[#131929] border-t border-[rgba(255,255,255,0.04)]">
                     <tr>
-                      <td colSpan={4} className="px-4 py-3 text-right text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Total:</td>
+                      <td colSpan={5} className="px-4 py-3 text-right text-[10px] font-black text-[#8a95a8] uppercase tracking-widest">Total:</td>
                       <td className="px-4 py-3 text-lg font-black text-[#c9a84c]">৳ {orderTotal.toFixed(2)}</td>
                       <td />
                     </tr>

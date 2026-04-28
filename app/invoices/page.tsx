@@ -18,7 +18,7 @@ export default function InvoicesPage() {
    );
 }
 
-type InvoiceItem = { product_id: string; quantity: any; price: any; selected_head?: string };
+type InvoiceItem = { product_id: string; quantity: any; price: any; selected_head?: string; quality?: string };
 
 function InvoicesContent() {
    const router = useRouter();
@@ -49,7 +49,7 @@ function InvoicesContent() {
    const [form, setForm] = useState({
       contact_id: '',
       date: new Date().toISOString().split('T')[0],
-      items: [{ product_id: '', quantity: '', price: '' as any }] as InvoiceItem[],
+      items: [{ product_id: '', quantity: '', price: '' as any, quality: '' }] as InvoiceItem[],
       discount: '' as any,
       discount_type: 'amount',
       discount_method: '',
@@ -177,8 +177,13 @@ function InvoicesContent() {
       } catch (err) { console.error('fetchInvoices:', err); }
    };
 
-   const handleAddItem = () => setForm({ ...form, items: [...form.items, { product_id: '', quantity: '', price: '' as any }] });
-   const handleAddReturnedItem = () => setForm({ ...form, returnedItems: [...form.returnedItems, { product_id: '', quantity: '', price: '' as any }] });
+   const handleAddItem = () => {
+      setForm({ ...form, items: [...form.items, { product_id: '', quantity: '', price: '' as any, quality: '' }] });
+   };
+
+   const handleReturnAddItem = () => {
+      setForm({ ...form, returnedItems: [...form.returnedItems, { product_id: '', quantity: '', price: '' as any, quality: '' }] });
+   };
 
    const handleRemoveItem = (index: number) => {
       const newItems = [...form.items];
@@ -213,8 +218,14 @@ function InvoicesContent() {
       if (field === 'product_id') {
          const prod = products.find(p => p.id === finalValue);
          if (prod) {
-            newItems[index].price = Number(prod.price || 0);
-            newItems[index].selected_head = '';
+            if (prod.variants && Array.isArray(prod.variants) && prod.variants.length > 0) {
+               newItems[index].selected_head = prod.variants[0].name;
+               newItems[index].price = Number(prod.variants[0].price || 0);
+            } else {
+               newItems[index].price = Number(prod.price || 0);
+               newItems[index].selected_head = '';
+            }
+            newItems[index].quality = prod.product_quality || '';
 
             if ((activeTab === 'sell' || (activeTab === 'exchange' && !isReturned)) && prod.stock_quantity !== undefined) {
                const available = Number(prod.stock_quantity);
@@ -222,6 +233,14 @@ function InvoicesContent() {
                   newItems[index].quantity = Math.max(0, available);
                }
             }
+         }
+      } else if (field === 'selected_head') {
+         const prod = products.find(p => p.id === newItems[index].product_id);
+         if (prod && prod.variants && Array.isArray(prod.variants)) {
+             const variant = prod.variants.find((v: any) => v.name === finalValue);
+             if (variant) {
+                 newItems[index].price = Number(variant.price || 0);
+             }
          }
       }
       setForm({ ...form, [listName]: newItems });
@@ -720,6 +739,7 @@ function InvoicesContent() {
                                  <tr style={{ background: 'rgba(201,168,76,.08)' }}>
                                     <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Product</th>
                                     <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Variant/Head</th>
+                                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Quality</th>
                                     <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 100, borderBottom: '1px solid ' + N.borderSub }}>Quantity</th>
                                     <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Unit Price (৳)</th>
                                     <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.gold, textTransform: 'uppercase', width: 120, borderBottom: '1px solid ' + N.borderSub }}>Subtotal (৳)</th>
@@ -738,14 +758,30 @@ function InvoicesContent() {
                                              </select>
                                           </td>
                                           <td style={{ padding: '10px 14px' }}>
-                                             {(selProd?.product_heads && Array.isArray(selProd.product_heads) && selProd.product_heads.length > 0) ? (
+                                             {((selProd?.variants && Array.isArray(selProd.variants) && selProd.variants.length > 0) || (selProd?.product_heads && Array.isArray(selProd.product_heads) && selProd.product_heads.length > 0)) ? (
                                                 <select value={item.selected_head || ''} onChange={e => handleItemChange(index, 'selected_head', e.target.value)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
                                                    <option value="">No Variant</option>
-                                                   {selProd.product_heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
+                                                   {selProd.variants && selProd.variants.length > 0 ? (
+                                                      selProd.variants.map((v: any, vi: number) => <option key={vi} value={v.name}>{v.name} (৳{v.price})</option>)
+                                                   ) : (
+                                                      selProd.product_heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)
+                                                   )}
                                                 </select>
                                              ) : (
                                                 <span style={{ fontSize: 11, color: N.textMut, paddingLeft: 8 }}>N/A</span>
                                              )}
+                                          </td>
+                                          <td style={{ padding: '10px 14px' }}>
+                                             <select value={item.quality || ''} onChange={e => handleItemChange(index, 'quality', e.target.value)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
+                                                <option value="">No Quality</option>
+                                                <option value="Light Series">Light Series</option>
+                                                <option value="Medium Series">Medium Series</option>
+                                                <option value="AC Series">AC Series</option>
+                                                <option value="Essential Series">Essential Series</option>
+                                                <option value="Classic Series">Classic Series</option>
+                                                <option value="Signature Series">Signature Series</option>
+                                                <option value="Elite Series">Elite Series</option>
+                                             </select>
                                           </td>
                                           <td style={{ padding: '10px 14px' }}>
                                              <input required type="number" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
@@ -789,6 +825,7 @@ function InvoicesContent() {
                                        <tr style={{ background: 'rgba(248,113,113,.08)' }}>
                                           <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', borderBottom: '1px solid ' + N.borderSub }}>Product</th>
                                           <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Variant/Head</th>
+                                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Quality</th>
                                           <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 100, borderBottom: '1px solid ' + N.borderSub }}>Quantity</th>
                                           <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 140, borderBottom: '1px solid ' + N.borderSub }}>Unit Price (৳)</th>
                                           <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: N.red, textTransform: 'uppercase', width: 120, borderBottom: '1px solid ' + N.borderSub }}>Credit (৳)</th>
@@ -807,14 +844,30 @@ function InvoicesContent() {
                                                    </select>
                                                 </td>
                                                 <td style={{ padding: '10px 14px' }}>
-                                                   {(selProd?.product_heads && Array.isArray(selProd.product_heads) && selProd.product_heads.length > 0) ? (
+                                                   {((selProd?.variants && Array.isArray(selProd.variants) && selProd.variants.length > 0) || (selProd?.product_heads && Array.isArray(selProd.product_heads) && selProd.product_heads.length > 0)) ? (
                                                       <select value={item.selected_head || ''} onChange={e => handleItemChange(index, 'selected_head', e.target.value, true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
                                                          <option value="">No Variant</option>
-                                                         {selProd.product_heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)}
+                                                         {selProd.variants && selProd.variants.length > 0 ? (
+                                                            selProd.variants.map((v: any, vi: number) => <option key={vi} value={v.name}>{v.name} (৳{v.price})</option>)
+                                                         ) : (
+                                                            selProd.product_heads.map((h: string, hi: number) => <option key={hi} value={h}>{h}</option>)
+                                                         )}
                                                       </select>
                                                    ) : (
                                                       <span style={{ fontSize: 11, color: N.textMut, paddingLeft: 8 }}>N/A</span>
                                                    )}
+                                                </td>
+                                                <td style={{ padding: '10px 14px' }}>
+                                                   <select value={item.quality || ''} onChange={e => handleItemChange(index, 'quality', e.target.value, true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, background: 'rgba(255,255,255,.03)' }}>
+                                                      <option value="">No Quality</option>
+                                                      <option value="Light Series">Light Series</option>
+                                                      <option value="Medium Series">Medium Series</option>
+                                                      <option value="AC Series">AC Series</option>
+                                                      <option value="Essential Series">Essential Series</option>
+                                                      <option value="Classic Series">Classic Series</option>
+                                                      <option value="Signature Series">Signature Series</option>
+                                                      <option value="Elite Series">Elite Series</option>
+                                                   </select>
                                                 </td>
                                                 <td style={{ padding: '10px 14px' }}>
                                                    <input required type="number" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value), true)} style={{ ...inp, padding: '7px 10px', fontSize: 12, textAlign: 'right', background: 'rgba(255,255,255,.03)' }} />
@@ -836,14 +889,14 @@ function InvoicesContent() {
                                        })}
                                        {form.returnedItems.length === 0 && (
                                           <tr>
-                                             <td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: N.textMut, fontSize: 12 }}>No items added to return list.</td>
+                                             <td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: N.textMut, fontSize: 12 }}>No items added to return list.</td>
                                           </tr>
                                        )}
                                     </tbody>
                                  </table>
                               </div>
                               <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,.01)' }}>
-                                 <button type="button" onClick={handleAddReturnedItem}
+                                 <button type="button" onClick={handleReturnAddItem}
                                     style={{ padding: '7px 14px', borderRadius: 8, border: '1px dashed ' + N.red, background: 'rgba(248,113,113,.05)', color: N.red, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}>
                                     <Plus style={{ width: 14, height: 14 }} /> Add Return Item
                                  </button>

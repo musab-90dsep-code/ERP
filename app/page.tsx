@@ -9,10 +9,12 @@ import {
   Activity, Clock, Star, AlertTriangle, XCircle
 } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/components/AuthProvider';
 
 type Period = 'day' | 'week' | 'month' | 'year';
 
 export default function Dashboard() {
+  const { activeShopId, shops } = useAuth();
   const [stats, setStats] = useState({ products: 0, invoices: 0, employees: 0, checks: 0 });
   const [recentEmployees, setRecentEmployees] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
@@ -124,7 +126,7 @@ export default function Dashboard() {
             </span>
           </div>
           <h1 className="flex items-center gap-3 text-3xl font-black text-[#c9a84c] tracking-tight">
-            <span>🌙</span> BRASSFLOW ERP <span className="text-[#4a5568] font-semibold text-2xl mx-1">•</span> <span className="text-[#8a95a8] font-medium text-xl tracking-normal">Business Manager</span>
+            <span>🌙</span> {shops.find(s => s.id === activeShopId)?.name || 'BRASSFLOW ERP'} <span className="text-[#4a5568] font-semibold text-2xl mx-1">•</span> <span className="text-[#8a95a8] font-medium text-xl tracking-normal">Business Manager</span>
           </h1>
         </div>
         <div className="flex items-center gap-3">

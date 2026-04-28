@@ -39,13 +39,31 @@ function StockContent() {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Variant popup state (per-product view)
+  const [variantPopup, setVariantPopup] = useState<{product: any} | null>(null);
+
+  // ── Global Variant Manager ──
+  // Stored in localStorage per category: erp_variants_raw / erp_variants_finished
+  const getStorageKey = (cat: string) => cat === 'raw-materials' ? 'erp_variants_raw' : 'erp_variants_finished';
+  const loadGlobalVariants = (cat: string): string[] => {
+    try { return JSON.parse(localStorage.getItem(getStorageKey(cat)) || '[]'); } catch { return []; }
+  };
+  const saveGlobalVariants = (cat: string, list: string[]) => {
+    localStorage.setItem(getStorageKey(cat), JSON.stringify(list));
+  };
+  const [showVariantManager, setShowVariantManager] = useState(false);
+  const [globalVariants, setGlobalVariants] = useState<string[]>([]);
+  const [newVariantInput, setNewVariantInput] = useState('');
+
+
+
   const [formData, setFormData] = useState<any>({
-    name: '', sku: '', price: '', cost: '', stock_quantity: '', is_tracked: true,
+    name: '', sku: '', cost: '', stock_quantity: '', is_tracked: true,
     low_stock_alert: false, minimum_stock: '',
     unit: 'pcs', unit_value: 1, barcode: '', use_for_processing: false,
     processing_price_auto: '', processing_price_manual: '',
     image_urls: [] as string[],
-    product_heads: [] as string[],
+    variants: [] as {name: string; price: string}[],
     product_quality: ''
   });
 
@@ -54,6 +72,9 @@ function StockContent() {
 
   const isRawMaterials = tab === 'raw-materials';
   const category = tab === 'raw-materials' ? 'raw-materials' : 'finished-goods';
+
+  // Load global variants when tab or manager opens
+  useEffect(() => { setGlobalVariants(loadGlobalVariants(category)); }, [category, showVariantManager]);
 
   // দশমিক এবং অন্যান্য অদরকারি ক্যারেক্টার ব্লক করার ফাংশন
   const blockInvalidChar = (e: any) => {
@@ -217,11 +238,14 @@ function StockContent() {
       if (!finalSku) finalSku = `SKU-${Date.now().toString().slice(-6)}`;
 
       // ডেটাকে পূর্ণ সংখ্যায় কনভার্ট করা হচ্ছে
+      const cleanVariants = (formData.variants || []).filter((v: any) => v.name?.trim());
+      // For backwards compat: also store first variant price as product price
+      const firstPrice = cleanVariants.length > 0 ? parseFloat(String(cleanVariants[0].price)) || 0 : 0;
       const payload = {
         category,
         name: formData.name,
         sku: finalSku,
-        price: formData.price === '' ? 0 : Math.round(parseFloat(String(formData.price)) * 100) / 100,
+        price: firstPrice,
         cost: formData.cost === '' ? 0 : Math.round(parseFloat(String(formData.cost)) * 100) / 100,
         stock_quantity: formData.stock_quantity === '' ? 0 : Math.round(parseFloat(String(formData.stock_quantity)) * 1000) / 1000,
         unit: formData.unit || 'pcs',
@@ -234,7 +258,8 @@ function StockContent() {
         processing_price_auto: formData.processing_price_auto === '' ? 0 : Math.round(parseFloat(String(formData.processing_price_auto)) * 100) / 100,
         processing_price_manual: formData.processing_price_manual === '' ? 0 : Math.round(parseFloat(String(formData.processing_price_manual)) * 100) / 100,
         image_urls: finalImageUrls,
-        product_heads: formData.product_heads ? formData.product_heads.filter((h: string) => h.trim()) : [],
+        variants: cleanVariants,
+        product_heads: cleanVariants.map((v: any) => v.name),
         product_quality: formData.product_quality || '',
       };
 
@@ -259,10 +284,10 @@ function StockContent() {
     setShowHeads(false);
     setShowRawHeads(false);
     setFormData({
-      name: '', sku: '', price: '', cost: '', stock_quantity: '', is_tracked: true,
+      name: '', sku: '', cost: '', stock_quantity: '', is_tracked: true,
       low_stock_alert: false, minimum_stock: '',
       unit: 'pcs', barcode: '', use_for_processing: false, processing_price_auto: '', processing_price_manual: '', image_urls: [],
-      product_heads: [],
+      variants: [],
       product_quality: ''
     });
     setImageFiles([]);
@@ -270,11 +295,12 @@ function StockContent() {
   };
 
   const handleEdit = (product: any) => {
+    const rawVariants = product.variants || [];
+    const legacyHeads: {name: string; price: string}[] = (product.product_heads || []).map((h: string) => ({ name: h, price: '' }));
+    const variants = rawVariants.length > 0 ? rawVariants : legacyHeads;
     setFormData({
       name: product.name || '',
       sku: product.sku || '',
-      // আগের কোনো দশমিক ডেটা থাকলে তা রিমুভ করা হচ্ছে
-      price: product.price ? Math.floor(Number(product.price)) : '',
       cost: product.cost ? Math.floor(Number(product.cost)) : '',
       stock_quantity: product.stock_quantity ? Math.floor(Number(product.stock_quantity)) : '',
       is_tracked: product.is_tracked ?? true,
@@ -286,13 +312,12 @@ function StockContent() {
       processing_price_auto: product.processing_price_auto ? Math.floor(Number(product.processing_price_auto)) : '',
       processing_price_manual: product.processing_price_manual ? Math.floor(Number(product.processing_price_manual)) : '',
       image_urls: product.image_urls || [],
-      product_heads: product.product_heads || [],
+      variants,
       product_quality: product.product_quality || ''
     });
     setHasBarcode(!!product.barcode);
-    const heads = product.product_heads || [];
-    setShowHeads(heads.length > 0);
-    setShowRawHeads(heads.length > 0 && product.category === 'raw-materials');
+    setShowHeads(variants.length > 0 && product.category === 'finished-goods');
+    setShowRawHeads(variants.length > 0 && product.category === 'raw-materials');
     setImagePreviews(product.image_urls || []);
     setImageFiles([]);
     setEditingId(product.id);
@@ -352,6 +377,10 @@ function StockContent() {
 
           <button onClick={fetchGlobalStockHistory} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] text-sm font-bold shadow-sm transition hover:bg-[rgba(255,255,255,0.05)]">
             <History className="w-4 h-4 text-blue-400" /> Stock History
+          </button>
+
+          <button onClick={() => setShowVariantManager(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#c9a84c] text-sm font-bold shadow-sm transition hover:bg-[rgba(201,168,76,0.08)]">
+            <ChevronDown className="w-4 h-4" /> Variants
           </button>
 
           <div className="flex items-center gap-2">
@@ -429,17 +458,18 @@ function StockContent() {
               <label className={labelClass}>Product ID (Auto-generated)</label>
               <input type="text" value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} placeholder="Leave blank to auto-generate" className={inputClass} />
             </div>
-            <div>
-              <label className={labelClass}>Price (৳)</label>
-              <input required type="number" onKeyDown={blockInvalidChar} value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} className={inputClass} />
-            </div>
+            {/* Price moved to variants — no standalone price field */}
             <div>
               <label className={labelClass}>Product Quality</label>
               <select value={formData.product_quality} onChange={e => setFormData({ ...formData, product_quality: e.target.value })} className={inputClass}>
                 <option value="">— Select Quality —</option>
-                <option value="Light">Light</option>
-                <option value="Medium">Medium</option>
-                <option value="AC">AC</option>
+                <option value="Light Series">Light Series</option>
+                <option value="Medium Series">Medium Series</option>
+                <option value="AC Series">AC Series</option>
+                <option value="Essential Series">Essential Series</option>
+                <option value="Classic Series">Classic Series</option>
+                <option value="Signature Series">Signature Series</option>
+                <option value="Elite Series">Elite Series</option>
               </select>
             </div>
             <div>
@@ -517,97 +547,80 @@ function StockContent() {
               </div>
             )}
 
-            {/* ── Finished Goods: Product Variants ── */}
-            {!isRawMaterials && (
-              <div className="md:col-span-3 p-5 bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.15)] rounded-xl">
-                <label className="flex items-center gap-3 cursor-pointer mb-1 w-max select-none">
-                  <input type="checkbox" checked={showHeads} onChange={e => {
-                    setShowHeads(e.target.checked);
-                    if (!e.target.checked) setFormData({ ...formData, product_heads: [] });
-                    else if (formData.product_heads.length === 0) setFormData({ ...formData, product_heads: [''] });
-                  }} className="w-5 h-5 accent-[#c9a84c] rounded" />
-                  <span className="text-sm font-bold text-[#c9a84c]">Add Product Variants / Categories</span>
-                </label>
-                <p className="text-[11px] font-medium text-[#8a95a8] mb-4 ml-8">e.g. Size: S, M, L — or Color: Red, Blue</p>
-
-                {showHeads && (
-                  <div className="animate-fade-in ml-8">
-                    <div className="flex flex-col gap-3 mb-4">
-                      {formData.product_heads.map((head: string, hi: number) => (
-                        <div key={hi} className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-[#c9a84c] w-4 text-right shrink-0">{hi + 1}.</span>
-                          <input
-                            type="text"
-                            placeholder="e.g. Large, Red, Premium..."
-                            value={head}
-                            onChange={e => {
-                              const updated = [...formData.product_heads];
-                              updated[hi] = e.target.value;
-                              setFormData({ ...formData, product_heads: updated });
-                            }}
-                            className={inputClass}
-                          />
-                          {formData.product_heads.length > 1 && (
-                            <button type="button" onClick={() => setFormData({ ...formData, product_heads: formData.product_heads.filter((_: string, i: number) => i !== hi) })} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
-                              <X className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => setFormData({ ...formData, product_heads: [...formData.product_heads, ''] })} className="text-[11px] font-bold text-[#0a0900] bg-[#c9a84c] hover:bg-[#f0c040] px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-md">
-                      <Plus className="w-3.5 h-3.5" /> Add Another Variant
-                    </button>
-                  </div>
-                )}
+            {/* ── Variants Section: Select from Global Variants ── */}
+            <div className="md:col-span-3 p-5 bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.15)] rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <span className="text-sm font-bold text-[#c9a84c]">
+                    {isRawMaterials ? 'Material Variants' : 'Product Variants'}
+                  </span>
+                  <p className="text-[11px] text-[#8a95a8] mt-0.5">
+                    Select from global variants list and set price for each.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowVariantManager(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1a2235] border border-[rgba(201,168,76,0.3)] text-[#c9a84c] text-[11px] font-bold transition-colors hover:bg-[rgba(201,168,76,0.1)]"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" /> Manage
+                  </button>
+                </div>
               </div>
-            )}
 
-            {/* ── Raw Materials: Product Variants ── */}
-            {isRawMaterials && (
-              <div className="md:col-span-3 p-5 bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.15)] rounded-xl">
-                <label className="flex items-center gap-3 cursor-pointer mb-1 w-max select-none">
-                  <input type="checkbox" checked={showRawHeads} onChange={e => {
-                    setShowRawHeads(e.target.checked);
-                    if (!e.target.checked) setFormData({ ...formData, product_heads: [] });
-                    else if (formData.product_heads.length === 0) setFormData({ ...formData, product_heads: [''] });
-                  }} className="w-5 h-5 accent-[#c9a84c] rounded" />
-                  <span className="text-sm font-bold text-[#c9a84c]">Add Material Variants / Categories</span>
-                </label>
-                <p className="text-[11px] font-medium text-[#8a95a8] mb-4 ml-8">e.g. Grade: A, B — or Type: Fine, Coarse</p>
-
-                {showRawHeads && (
-                  <div className="animate-fade-in ml-8">
-                    <div className="flex flex-col gap-3 mb-4">
-                      {formData.product_heads.map((head: string, hi: number) => (
-                        <div key={hi} className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-[#c9a84c] w-4 text-right shrink-0">{hi + 1}.</span>
-                          <input
-                            type="text"
-                            placeholder="e.g. Grade A, Type-1..."
-                            value={head}
-                            onChange={e => {
-                              const updated = [...formData.product_heads];
-                              updated[hi] = e.target.value;
-                              setFormData({ ...formData, product_heads: updated });
-                            }}
-                            className={inputClass}
-                          />
-                          {formData.product_heads.length > 1 && (
-                            <button type="button" onClick={() => setFormData({ ...formData, product_heads: formData.product_heads.filter((_: string, i: number) => i !== hi) })} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
-                              <X className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => setFormData({ ...formData, product_heads: [...formData.product_heads, ''] })} className="text-[11px] font-bold text-[#0a0900] bg-[#c9a84c] hover:bg-[#f0c040] px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-md">
-                      <Plus className="w-3.5 h-3.5" /> Add Another Variant
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Available global variants as checkboxes */}
+              {globalVariants.length === 0 ? (
+                <div className="text-center py-5 border border-dashed border-[rgba(255,255,255,0.06)] rounded-lg">
+                  <p className="text-[11px] text-[#4a5568] mb-2">No variants defined yet.</p>
+                  <button type="button" onClick={() => setShowVariantManager(true)} className="text-[11px] font-bold text-[#c9a84c] underline">Click here to add variants</button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {globalVariants.map((gv, gi) => {
+                    const existing = (formData.variants || []).find((v: any) => v.name === gv);
+                    const isSelected = !!existing;
+                    return (
+                      <div key={gi} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                        isSelected ? 'bg-[rgba(201,168,76,0.08)] border-[rgba(201,168,76,0.3)]' : 'bg-[#131929] border-[rgba(255,255,255,0.04)]'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          id={`variant-${gi}`}
+                          checked={isSelected}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, variants: [...(formData.variants || []), { name: gv, price: '' }] });
+                            } else {
+                              setFormData({ ...formData, variants: (formData.variants || []).filter((v: any) => v.name !== gv) });
+                            }
+                          }}
+                          className="w-4 h-4 accent-[#c9a84c] rounded shrink-0"
+                        />
+                        <label htmlFor={`variant-${gi}`} className="flex-1 text-sm font-bold text-[#e8eaf0] cursor-pointer">{gv}</label>
+                        {isSelected && (
+                          <div className="w-32 shrink-0">
+                            <input
+                              type="number"
+                              placeholder="Price ৳"
+                              onKeyDown={blockInvalidChar}
+                              value={existing?.price || ''}
+                              onChange={e => {
+                                const updated = (formData.variants || []).map((v: any) =>
+                                  v.name === gv ? { ...v, price: e.target.value } : v
+                                );
+                                setFormData({ ...formData, variants: updated });
+                              }}
+                              className={`${inputClass} text-[#f0c040] font-bold`}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="md:col-span-3 flex justify-end gap-3 mt-4 pt-6 border-t border-[rgba(255,255,255,0.04)]">
               <button type="button" onClick={resetEmpForm} className="px-6 py-2.5 rounded-lg border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-white hover:bg-[rgba(255,255,255,0.05)] font-bold transition-colors text-sm">
@@ -663,13 +676,36 @@ function StockContent() {
                           <div>
                             <p className="font-bold text-[#e8eaf0] text-sm group-hover:text-[#c9a84c] transition-colors">{product.name}</p>
                             {product.use_for_processing && <span className="mt-1 inline-block text-[9px] bg-[rgba(96,165,250,0.1)] text-[#60a5fa] border border-[rgba(96,165,250,0.2)] px-2 py-0.5 rounded uppercase font-bold tracking-wider">For Processing</span>}
+                            {product.variants && product.variants.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setVariantPopup({ product }); }}
+                                className="mt-1 inline-flex items-center gap-1 text-[9px] bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded uppercase font-bold tracking-wider hover:bg-[rgba(201,168,76,0.2)] transition-colors"
+                              >
+                                {product.variants.length} Variants
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>
                     )}
                     {!isRawMaterials && visibleColumns.sku && <td className="px-6 py-4 text-xs font-medium text-[#8a95a8]">{product.sku || '-'}</td>}
                     {visibleColumns.barcode && <td className="px-6 py-4 text-xs font-medium text-[#8a95a8]">{product.barcode || '-'}</td>}
-                    {visibleColumns.price && <td className="px-6 py-4 font-black text-white">৳{Math.floor(Number(product.price))}</td>}
+                    {visibleColumns.price && (
+                      <td className="px-6 py-4">
+                        {product.variants && product.variants.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); setVariantPopup({ product }); }}
+                            className="text-xs font-bold text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-1 rounded-lg hover:bg-[rgba(201,168,76,0.2)] transition-colors"
+                          >
+                            ৳ {Math.floor(Number(product.variants[0].price))}+
+                          </button>
+                        ) : (
+                          <span className="font-black text-white">৳{Math.floor(Number(product.price))}</span>
+                        )}
+                      </td>
+                    )}
                     {visibleColumns.stock && (
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -840,6 +876,135 @@ function StockContent() {
               </button>
               <button onClick={handleAddStock} disabled={addStockSubmitting || !addStockQty || Number(addStockQty) <= 0} className="px-6 py-2.5 bg-emerald-500 text-white font-extrabold rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors shadow-[0_4px_16px_rgba(52,211,153,0.3)] text-sm">
                 {addStockSubmitting ? 'Saving...' : 'Add Stock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          GLOBAL VARIANT MANAGER POPUP
+      ══════════════════════════════════════ */}
+      {showVariantManager && (
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#131929] border border-[rgba(201,168,76,0.3)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden">
+            <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-sm font-black text-[#c9a84c] uppercase tracking-widest">
+                  {isRawMaterials ? 'Material Variants' : 'Product Variants'}
+                </h2>
+                <p className="text-[10px] text-[#8a95a8] mt-0.5">Manage global variant names for {isRawMaterials ? 'Raw Materials' : 'Finished Goods'}</p>
+              </div>
+              <button onClick={() => setShowVariantManager(false)} className="text-[#8a95a8] hover:text-white p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Add new variant */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newVariantInput}
+                  onChange={e => setNewVariantInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const v = newVariantInput.trim();
+                      if (v && !globalVariants.includes(v)) {
+                        const updated = [...globalVariants, v];
+                        setGlobalVariants(updated);
+                        saveGlobalVariants(category, updated);
+                        setNewVariantInput('');
+                      }
+                    }
+                  }}
+                  placeholder={isRawMaterials ? 'e.g. Grade A, Type-1' : 'e.g. Size L, Color Red'}
+                  className="flex-1 bg-[#1a2235] border border-[rgba(255,255,255,0.08)] rounded-lg px-3 py-2.5 text-sm text-[#e8eaf0] outline-none focus:border-[#c9a84c]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const v = newVariantInput.trim();
+                    if (v && !globalVariants.includes(v)) {
+                      const updated = [...globalVariants, v];
+                      setGlobalVariants(updated);
+                      saveGlobalVariants(category, updated);
+                      setNewVariantInput('');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#c9a84c] hover:bg-[#f0c040] text-[#0a0900] text-sm font-extrabold transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Add
+                </button>
+              </div>
+
+              {/* Variant list */}
+              {globalVariants.length === 0 ? (
+                <p className="text-center text-sm text-[#4a5568] py-6">No variants added yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {globalVariants.map((gv, gi) => (
+                    <div key={gi} className="flex items-center justify-between bg-[#1a2235] px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                      <span className="text-sm font-bold text-[#e8eaf0]">{gv}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = globalVariants.filter((_, i) => i !== gi);
+                          setGlobalVariants(updated);
+                          saveGlobalVariants(category, updated);
+                        }}
+                        className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 bg-[#1a2235] border-t border-[rgba(255,255,255,0.04)] flex justify-end">
+              <button onClick={() => setShowVariantManager(false)} className="px-6 py-2.5 bg-[#131929] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] font-bold rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors text-sm">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          VARIANT POPUP MODAL (per product)
+      ══════════════════════════════════════ */}
+      {variantPopup && (
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-[#131929] border border-[rgba(201,168,76,0.3)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden">
+            <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-sm font-black text-[#c9a84c] uppercase tracking-widest">{variantPopup.product.name}</h2>
+                <p className="text-[10px] text-[#8a95a8] mt-0.5 uppercase tracking-widest">
+                  {variantPopup.product.category === 'raw-materials' ? 'Material Variants' : 'Product Variants'}
+                </p>
+              </div>
+              <button onClick={() => setVariantPopup(null)} className="text-[#8a95a8] hover:text-white p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3">
+              {variantPopup.product.variants && variantPopup.product.variants.length > 0 ? (
+                variantPopup.product.variants.map((v: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between bg-[#1a2235] px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                    <span className="text-sm font-bold text-[#e8eaf0]">{v.name || `Variant ${i+1}`}</span>
+                    <span className="text-base font-black text-[#f0c040]">৳ {Math.floor(Number(v.price) || 0)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-sm text-[#4a5568] py-6">No variants found.</p>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-[#1a2235] border-t border-[rgba(255,255,255,0.04)] flex justify-end">
+              <button onClick={() => setVariantPopup(null)} className="px-6 py-2.5 bg-[#131929] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] font-bold rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors text-sm">
+                Close
               </button>
             </div>
           </div>

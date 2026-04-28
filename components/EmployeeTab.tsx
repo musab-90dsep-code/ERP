@@ -128,7 +128,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
     name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '',
     id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [] as string[],
     phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }],
-    daily_allowance: 0, monthly_allowance: 0, overtime_rate: 0,
+    daily_allowance: 0, monthly_allowance: 0,
     is_authorizer: false
   });
 
@@ -236,7 +236,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
   const resetEmpForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0, overtime_rate: 0, is_authorizer: false });
+    setEmpData({ name: '', role: '', salary: 0, phone: '', whatsapp: '', email: '', dob: '', address: '', id_document_type: 'NID', id_document_number: '', profile_image_url: '', id_photo_urls: [], phone_numbers: [{ number: '', is_whatsapp: false, is_imo: false, is_telegram: false }], daily_allowance: 0, monthly_allowance: 0, is_authorizer: false });
     setProfilePreview(null);
     setProfileImageFile(null);
     setIdPhotoFiles([]);
@@ -280,7 +280,6 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
       phone_numbers: parsePhones(emp.phone),
       daily_allowance: emp.daily_allowance || 0,
       monthly_allowance: emp.monthly_allowance || 0,
-      overtime_rate: emp.overtime_rate || 0,
       is_authorizer: emp.is_authorizer || false
     });
     setProfilePreview(emp.profile_image_url || null);
@@ -497,7 +496,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                       <label className={labelClass}>Base Salary (৳)</label>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
-                        <input required type="number" placeholder="0.00" value={empData.salary} onChange={e => setEmpData({ ...empData, salary: Number(e.target.value) })} className={`${inputClass} pl-10`} />
+                        <input required type="number" placeholder="0.00" value={empData.salary || ''} onChange={e => setEmpData({ ...empData, salary: Number(e.target.value) })} className={`${inputClass} pl-10`} />
                       </div>
                     </div>
                     <div>
@@ -514,13 +513,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                         <input type="number" placeholder="0.00" value={empData.monthly_allowance || ''} onChange={e => setEmpData({ ...empData, monthly_allowance: Number(e.target.value) })} className={`${inputClass} pl-10 bg-[rgba(52,211,153,0.05)] border-[rgba(52,211,153,0.15)]`} />
                       </div>
                     </div>
-                    <div>
-                      <label className={labelClass}>Overtime Rate / Hr (৳)</label>
-                      <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
-                        <input type="number" placeholder="0.00" value={empData.overtime_rate || ''} onChange={e => setEmpData({ ...empData, overtime_rate: Number(e.target.value) })} className={`${inputClass} pl-10 bg-[rgba(249,115,22,0.05)] border-[rgba(249,115,22,0.15)]`} />
-                      </div>
-                    </div>
+
 
                     <div className="sm:col-span-2">
                       <label className={labelClass}>Address</label>
@@ -883,10 +876,7 @@ export default function EmployeeTab({ employees, fetchEmployees, handleDelete }:
                    <p className="text-[9px] font-black text-[#8a95a8] uppercase tracking-[0.2em] mb-1">Mo. Allowance</p>
                    <p className="text-xl font-black text-white"><span className="text-xs text-[#8a95a8] mr-0.5">৳</span>{Number(viewingEmployee.monthly_allowance || 0).toLocaleString()}</p>
                 </div>
-                <div className="bg-[#1a2235]/60 border border-[rgba(255,255,255,0.04)] rounded-2xl p-4 flex flex-col justify-center text-center">
-                   <p className="text-[9px] font-black text-orange-400/80 uppercase tracking-[0.2em] mb-1">OT Rate / hr</p>
-                   <p className="text-xl font-black text-orange-400"><span className="text-xs text-orange-400/50 mr-0.5">৳</span>{Number(viewingEmployee.overtime_rate || 0).toLocaleString()}</p>
-                </div>
+
               </div>
 
               {/* Personal & Contact Info */}
