@@ -52,11 +52,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#c9a84c" />
         <meta name="msapplication-TileImage" content="/icon-192.png" />
-
-
       </head>
       <body
-        className="flex h-screen overflow-hidden"
+        className="h-screen overflow-hidden"
         style={{ background: '#0b0f1a' }}
         suppressHydrationWarning
       >
@@ -64,15 +62,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <InstallPrompt />
 
-          <Suspense fallback={<div className="hidden lg:block w-[250px] bg-[#0d1220]" />}>
+          {/* Sidebar is always fixed/overlay — never pushes content */}
+          <Suspense fallback={null}>
             <Sidebar />
           </Suspense>
 
-          {/* Main content area */}
-          <main className="flex-1 overflow-y-auto w-full min-w-0" style={{ background: '#0b0f1a' }}>
-            {/* Spacer for mobile hamburger button */}
-            <div className="lg:hidden h-16" />
-            <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+          {/* Main content takes full width on mobile, and leaves 80px for the collapsed sidebar on desktop */}
+          <main className="w-full h-screen overflow-y-auto md:pl-[80px]" style={{ background: '#0b0f1a' }}>
+            <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8 mt-14 md:mt-0">
               {children}
             </div>
           </main>

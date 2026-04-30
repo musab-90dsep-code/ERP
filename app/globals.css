@@ -180,10 +180,15 @@ input:focus, select:focus, textarea:focus {
   50%      { box-shadow: 0 0 0 8px rgba(201,168,76,0); }
 }
 
+@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
 .animate-fade-in  { animation: fadeIn  .25s ease forwards; }
 .animate-slide-up { animation: slideUp .30s ease forwards; }
 .animate-scale-in { animation: scaleIn .25s ease forwards; }
 .animate-gold     { animation: goldPulse 2.5s infinite; }
+.animate-slide-in-right { animation: slideInRight .4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-slide-in-up { animation: slideInUp .4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
 /* ─────────────────────────────────────────────
    PAGE HEADERS
@@ -237,3 +242,38 @@ input:focus, select:focus, textarea:focus {
 }
 
 .mobile-hamburger { position:fixed; top:16px; left:16px; z-index:50; }
+
+/* ─────────────────────────────────────────────
+   ERP DASHBOARD COMPONENTS
+───────────────────────────────────────────── */
+
+/* Dashboard Card */
+.erp-card {
+  background: #131929;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.45);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.erp-card:hover {
+  border-color: rgba(201,168,76,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+/* Status Badges for invoice table */
+.erp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: capitalize;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.erp-badge-paid    { background: rgba(34,197,94,0.12);  color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
+.erp-badge-pending { background: rgba(234,179,8,0.12);  color: #eab308; border: 1px solid rgba(234,179,8,0.2); }
+.erp-badge-partial { background: rgba(249,115,22,0.12); color: #f97316; border: 1px solid rgba(249,115,22,0.2); }
+.erp-badge-overdue { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }

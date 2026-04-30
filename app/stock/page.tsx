@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, Suspense, useMemo } from 'react';
+import { useState, useEffect, Suspense, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-import { Plus, Trash2, Pencil, Search, Filter, Printer, Download, ChevronDown, Package, Image as ImageIcon, X, Upload, Eye, LayoutGrid, List, Clock, History, Box, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Pencil, Search, Filter, Printer, Download, ChevronDown, Package, Image as ImageIcon, X, Upload, Eye, LayoutGrid, List, Clock, History, Box, AlertTriangle, MoreVertical, TrendingUp, DollarSign, CheckCircle } from 'lucide-react';
 
 function StockContent() {
   const searchParams = useSearchParams();
@@ -13,6 +13,7 @@ function StockContent() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingProduct, setViewingProduct] = useState<any | null>(null);
+  const [showVariantDropdown, setShowVariantDropdown] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [submitting, setSubmitting] = useState(false);
   const [hasBarcode, setHasBarcode] = useState(false);
@@ -34,8 +35,9 @@ function StockContent() {
   const [addStockNote, setAddStockNote] = useState('');
   const [addStockSubmitting, setAddStockSubmitting] = useState(false);
 
-  // ── Global Stock History State ──
+  // ── Stock History Modal State (Global and Per-Product) ──
   const [showGlobalHistory, setShowGlobalHistory] = useState(false);
+  const [historyModal, setHistoryModal] = useState<{ product: any } | null>(null);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -181,11 +183,21 @@ function StockContent() {
 
   const fetchGlobalStockHistory = async () => {
     setShowGlobalHistory(true);
+    setHistoryModal(null);
     setHistoryLoading(true);
     setHistoryData([]);
     try {
-      // Limit to 200 recent history entries
       const data = await api.getStockHistory({ item_type: category, limit: 200 });
+      setHistoryData(Array.isArray(data) ? data : data.results ?? []);
+    } catch { setHistoryData([]); }
+    setHistoryLoading(false);
+  };
+
+  const fetchProductHistory = async (productId: string) => {
+    setHistoryLoading(true);
+    setHistoryData([]);
+    try {
+      const data = await api.getStockHistory({ product: productId, limit: 200 });
       setHistoryData(Array.isArray(data) ? data : data.results ?? []);
     } catch { setHistoryData([]); }
     setHistoryLoading(false);
@@ -340,8 +352,26 @@ function StockContent() {
   const inputClass = "w-full bg-[#1a2235] border border-[rgba(255,255,255,0.06)] rounded-lg p-2.5 text-sm text-[#e8eaf0] focus:border-[#c9a84c] focus:ring-1 focus:ring-[rgba(201,168,76,0.3)] outline-none transition-colors";
   const labelClass = "block text-[10px] uppercase font-bold text-[#8a95a8] tracking-widest mb-2";
 
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  useEffect(() => {
+    const closeDropdown = () => setActiveDropdown(null);
+    document.addEventListener('click', closeDropdown);
+    return () => document.removeEventListener('click', closeDropdown);
+  }, []);
+
+  const totalProducts = products.length;
+  const inStockCount = products.filter(p => p.stock_quantity > 0).length;
+  const lowStockCount = products.filter(isLowStock).length;
+  const totalStockValue = products.reduce((acc, p) => acc + ((Number(p.stock_quantity) || 0) * (Number(p.price) || 0)), 0);
+
+  const topSelling = [...products].slice(0, 5); // Mocked Top Selling
+  const lowStockItemsList = products.filter(isLowStock).slice(0, 5);
+
+
+
   return (
-    <div className="pb-10 max-w-[1400px] mx-auto">
+    <div className="pb-10 max-w-[1600px] mx-auto min-h-screen">
       <style jsx global>{`
         @media print {
           nav, aside, button, .no-print, .actions-column { display: none !important; }
@@ -349,454 +379,721 @@ function StockContent() {
           .main-content { width: 100% !important; max-width: none !important; padding: 0 !important; }
           table { border-collapse: collapse !important; width: 100% !important; }
           th, td { border: 1px solid #ddd !important; color: black !important; background: white !important; padding: 8px !important; }
-          .low-stock-badge { color: red !important; font-weight: bold !important; }
         }
       `}</style>
+      
       {/* ── Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 bg-[#131929] p-6 rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] no-print">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 no-print">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-[#c9a84c]" />
-            <span className="text-xs font-bold tracking-[0.2em] text-[#8a95a8] uppercase">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+            <span className="text-[10px] font-bold tracking-[0.15em] text-[#8a95a8] uppercase">
               Inventory Management
             </span>
           </div>
-          <h1 className="flex items-center gap-3 text-2xl font-black text-white tracking-tight">
-            <Package className="w-6 h-6 text-[#c9a84c]" /> {headingTitle}
+          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+            <Package className="w-6 h-6 text-[#f59e0b]" /> {headingTitle}
           </h1>
+          <p className="text-xs text-[#8a95a8] mt-1">{isRawMaterials ? 'Materials for production' : 'Ready-to-sell products'}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="bg-[#1a2235] border border-[rgba(255,255,255,0.06)] rounded-lg p-1 flex items-center shadow-sm">
-            <button onClick={() => setViewMode('table')} className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-[#c9a84c] text-black' : 'text-[#8a95a8] hover:text-white'}`} title="Table View">
-              <List className="w-4 h-4" />
-            </button>
-            <button onClick={() => setViewMode('card')} className={`p-2 rounded-md transition-colors ${viewMode === 'card' ? 'bg-[#c9a84c] text-black' : 'text-[#8a95a8] hover:text-white'}`} title="Card View">
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
-
-          <button onClick={fetchGlobalStockHistory} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] text-sm font-bold shadow-sm transition hover:bg-[rgba(255,255,255,0.05)]">
-            <History className="w-4 h-4 text-blue-400" /> Stock History
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={fetchGlobalStockHistory} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a2235] border border-white/5 text-[#c8cdd7] text-xs font-bold hover:bg-white/5 transition">
+            <History className="w-3.5 h-3.5 text-[#3b82f6]" /> Stock History
           </button>
-
-          <button onClick={() => setShowVariantManager(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#c9a84c] text-sm font-bold shadow-sm transition hover:bg-[rgba(201,168,76,0.08)]">
-            <ChevronDown className="w-4 h-4" /> Variants
+          <button onClick={() => setShowVariantManager(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a2235] border border-white/5 text-[#c8cdd7] text-xs font-bold hover:bg-white/5 transition">
+            <List className="w-3.5 h-3.5 text-[#8a95a8]" /> Manage Variants
           </button>
-
-          <div className="flex items-center gap-2">
-            <button onClick={handleDownloadCSV} title="Download CSV" className="p-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-[#c9a84c] transition-colors">
-              <Download className="w-4 h-4" />
-            </button>
-            <button onClick={handlePrint} title="Print Report" className="p-2.5 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-[#c9a84c] transition-colors">
-              <Printer className="w-4 h-4" />
-            </button>
-          </div>
-
-          <button onClick={() => { if (!showForm) resetEmpForm(); setShowForm(!showForm); }} className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] text-sm font-extrabold shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition hover:opacity-90">
+          <button onClick={handleDownloadCSV} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a2235] border border-white/5 text-[#c8cdd7] text-xs font-bold hover:bg-white/5 transition">
+            <Download className="w-3.5 h-3.5 text-[#8a95a8]" /> Export
+          </button>
+          <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a2235] border border-white/5 text-[#c8cdd7] text-xs font-bold hover:bg-white/5 transition">
+            <Printer className="w-3.5 h-3.5 text-[#8a95a8]" /> Print
+          </button>
+          <button onClick={() => { if (!showForm) resetEmpForm(); setShowForm(!showForm); }} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#f0c040] text-[#0a0900] text-xs font-extrabold hover:bg-[#f5d061] transition">
             <Plus className="w-4 h-4" /> Add Product
           </button>
         </div>
       </div>
 
-      {/* ── Search and Filter Bar ── */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-8 no-print">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8a95a8]" />
-          <input type="text" placeholder="Search products by name, SKU, or barcode..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#131929] border border-[rgba(255,255,255,0.04)] rounded-xl py-3 pl-12 pr-4 text-sm text-[#e8eaf0] focus:border-[#c9a84c] focus:ring-1 focus:ring-[rgba(201,168,76,0.3)] outline-none transition-colors shadow-sm" />
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-[#131929] p-4 rounded-xl border border-white/5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-lg bg-[#f0c040]/10 flex items-center justify-center border border-[#f0c040]/20">
+            <Package className="w-5 h-5 text-[#f0c040]" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mb-1">Total Products</p>
+            <p className="text-xl font-black text-white">{totalProducts}</p>
+          </div>
         </div>
-        <div className="flex gap-4">
-          <select value={stockFilter} onChange={e => setStockFilter(e.target.value)} className="bg-[#131929] border border-[rgba(255,255,255,0.04)] rounded-xl px-4 py-3 text-sm font-bold text-[#8a95a8] outline-none shadow-sm cursor-pointer">
-            <option value="all">All Stock Level</option>
-            <option value="low">Low Stock Only</option>
-            <option value="in_stock">In Stock Only</option>
-          </select>
-
-          <select value={trackedFilter} onChange={e => setTrackedFilter(e.target.value)} className="bg-[#131929] border border-[rgba(255,255,255,0.04)] rounded-xl px-4 py-3 text-sm font-bold text-[#8a95a8] outline-none shadow-sm cursor-pointer">
-            <option value="all">All Tracked Types</option>
-            <option value="tracked">Tracked Items</option>
-            <option value="untracked">Untracked Items</option>
-          </select>
+        <div className="bg-[#131929] p-4 rounded-xl border border-white/5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-lg bg-[#22c55e]/10 flex items-center justify-center border border-[#22c55e]/20">
+            <CheckCircle className="w-5 h-5 text-[#22c55e]" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mb-1">In Stock</p>
+            <p className="text-xl font-black text-white">{inStockCount}</p>
+          </div>
+        </div>
+        <div className="bg-[#131929] p-4 rounded-xl border border-white/5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center border border-[#f59e0b]/20">
+            <AlertTriangle className="w-5 h-5 text-[#f59e0b]" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mb-1">Low Stock</p>
+            <p className="text-xl font-black text-white">{lowStockCount}</p>
+          </div>
+        </div>
+        <div className="bg-[#131929] p-4 rounded-xl border border-white/5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-lg bg-[#a855f7]/10 flex items-center justify-center border border-[#a855f7]/20">
+            <DollarSign className="w-5 h-5 text-[#a855f7]" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mb-1">Total Value</p>
+            <p className="text-xl font-black text-white">৳ {totalStockValue.toLocaleString()}</p>
+          </div>
         </div>
       </div>
 
-      {/* ── Form Section ── */}
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-[#131929] p-6 sm:p-8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[rgba(255,255,255,0.04)] mb-8 animate-fade-in">
-          <h2 className="text-lg font-black text-white mb-6 border-b border-[rgba(255,255,255,0.04)] pb-4">
-            {editingId ? 'Edit Product' : 'Add New Product'}
-          </h2>
-
-          <div className="mb-6 p-5 bg-[#1a2235] border border-[rgba(255,255,255,0.04)] rounded-xl">
-            <label className="text-sm font-bold text-[#e8eaf0] mb-3 flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-[#c9a84c]" /> Product Images (Max 5)
-            </label>
-            <div className="flex flex-wrap gap-4 items-start">
-              {imagePreviews.map((src, idx) => (
-                <div key={idx} className="relative w-24 h-24 rounded-lg overflow-hidden border border-[rgba(255,255,255,0.1)] shadow-sm group bg-[#131929]">
-                  <img src={src} alt="preview" className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removeImage(idx)} className="absolute top-1 right-1 bg-red-500/90 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-              {imagePreviews.length < 5 && (
-                <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-[rgba(255,255,255,0.1)] rounded-lg cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors text-[#8a95a8] hover:text-[#c9a84c]">
-                  <Upload className="w-6 h-6 mb-1" />
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Upload</span>
-                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageChange} />
-                </label>
-              )}
-            </div>
+      {/* ── Search & Filters ── */}
+      <div className="flex flex-col xl:flex-row gap-4 mb-6">
+        <div className="flex-1 flex gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a8]" />
+            <input type="text" placeholder="Search by name, SKU, or barcode..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#131929] border border-white/5 rounded-lg py-2.5 pl-10 pr-4 text-xs text-white focus:border-[#f0c040]/50 outline-none transition-colors" />
           </div>
+          <select value={stockFilter} onChange={e => setStockFilter(e.target.value)} className="bg-[#131929] border border-white/5 rounded-lg px-3 py-2.5 text-xs font-bold text-[#8a95a8] outline-none">
+            <option value="all">All Levels</option>
+            <option value="low">Low Stock</option>
+            <option value="in_stock">In Stock</option>
+          </select>
+          <select value={trackedFilter} onChange={e => setTrackedFilter(e.target.value)} className="bg-[#131929] border border-white/5 rounded-lg px-3 py-2.5 text-xs font-bold text-[#8a95a8] outline-none">
+            <option value="all">All Types</option>
+            <option value="tracked">Tracked</option>
+            <option value="untracked">Untracked</option>
+          </select>
+          <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#131929] border border-white/5 text-[#8a95a8] text-xs font-bold hover:text-white transition">
+            <Filter className="w-4 h-4" /> More Filters
+          </button>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2">
-              <label className={labelClass}>Product Name</label>
-              <input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Enter product name" className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Product ID (Auto-generated)</label>
-              <input type="text" value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} placeholder="Leave blank to auto-generate" className={inputClass} />
-            </div>
-            {/* Price moved to variants — no standalone price field */}
-            <div>
-              <label className={labelClass}>Product Quality</label>
-              <select value={formData.product_quality} onChange={e => setFormData({ ...formData, product_quality: e.target.value })} className={inputClass}>
-                <option value="">— Select Quality —</option>
-                <option value="Light Series">Light Series</option>
-                <option value="Medium Series">Medium Series</option>
-                <option value="AC Series">AC Series</option>
-                <option value="Essential Series">Essential Series</option>
-                <option value="Classic Series">Classic Series</option>
-                <option value="Signature Series">Signature Series</option>
-                <option value="Elite Series">Elite Series</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Unit</label>
-              <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} className={inputClass}>
-                <option value="pcs">Pieces (pcs)</option>
-                <option value="kg">Kilogram (kg)</option>
-                <option value="g">Gram (g)</option>
-                <option value="ltr">Liter (ltr)</option>
-                <option value="ml">Milliliter (ml)</option>
-                <option value="box">Box</option>
-                <option value="dozen">Dozen</option>
-                <option value="meter">Meter (m)</option>
-                <option value="feet">Feet (ft)</option>
-              </select>
-            </div>
-
-            <div className="flex flex-col justify-start mt-6">
-              <label className="flex items-center cursor-pointer mb-2 w-max">
-                <input type="checkbox" checked={hasBarcode} onChange={e => { setHasBarcode(e.target.checked); if (!e.target.checked) setFormData({ ...formData, barcode: '' }); }} className="w-5 h-5 accent-[#c9a84c] rounded bg-[#1a2235] border-[rgba(255,255,255,0.1)]" />
-                <span className="text-sm font-bold text-[#e8eaf0] ml-3">Add Barcode</span>
-              </label>
-              {hasBarcode && (
-                <div className="ml-8 mt-2 animate-slide-up">
-                  <input type="text" value={formData.barcode} onChange={e => setFormData({ ...formData, barcode: e.target.value })} placeholder="Scan or type barcode" className={inputClass} />
-                </div>
-              )}
-            </div>
-
-            <div className="md:col-span-3 bg-[#1a2235] p-5 rounded-xl border border-[rgba(255,255,255,0.04)]">
-              <label className="flex items-center cursor-pointer mb-3">
-                <input type="checkbox" checked={formData.is_tracked} onChange={e => setFormData({ ...formData, is_tracked: e.target.checked })} className="w-5 h-5 accent-[#c9a84c] rounded bg-[#131929]" />
-                <span className="text-sm font-bold text-[#e8eaf0] ml-3">Track Inventory Stock</span>
-              </label>
-
-              {formData.is_tracked && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 ml-8 mt-3 animate-fade-in border-l-2 border-[rgba(201,168,76,0.3)] pl-4">
-                  <div>
-                    <label className={labelClass}>Current Stock</label>
-                    <input type="number" onKeyDown={blockInvalidChar} value={formData.stock_quantity} onChange={e => setFormData({ ...formData, stock_quantity: e.target.value })} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className="flex items-center cursor-pointer mt-2 mb-2">
-                      <input type="checkbox" checked={formData.low_stock_alert} onChange={e => setFormData({ ...formData, low_stock_alert: e.target.checked })} className="w-4 h-4 accent-red-500 rounded" />
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#8a95a8] ml-2">Enable Low Stock Alert</span>
-                    </label>
-                    {formData.low_stock_alert && (
-                      <div className="animate-fade-in">
-                        <input type="number" onKeyDown={blockInvalidChar} placeholder="Min Stock Qty" value={formData.minimum_stock} onChange={e => setFormData({ ...formData, minimum_stock: e.target.value })} className={inputClass} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {isRawMaterials && (
-              <div className="md:col-span-3 flex flex-col justify-start p-5 bg-[rgba(96,165,250,0.05)] rounded-xl border border-[rgba(96,165,250,0.15)]">
-                <label className="flex items-center cursor-pointer mb-2">
-                  <input type="checkbox" checked={formData.use_for_processing} onChange={e => setFormData({ ...formData, use_for_processing: e.target.checked })} className="w-5 h-5 accent-blue-500 rounded" />
-                  <span className="text-sm font-bold text-[#60a5fa] ml-3">Use for Processing Material</span>
-                </label>
-                {formData.use_for_processing && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 ml-8 mt-3 animate-fade-in">
-                    <div>
-                      <label className={labelClass}>Auto Processing Price</label>
-                      <input type="number" onKeyDown={blockInvalidChar} value={formData.processing_price_auto} onChange={e => setFormData({ ...formData, processing_price_auto: e.target.value })} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Manual Processing Price</label>
-                      <input type="number" onKeyDown={blockInvalidChar} value={formData.processing_price_manual} onChange={e => setFormData({ ...formData, processing_price_manual: e.target.value })} className={inputClass} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Variants Section: Select from Global Variants ── */}
-            <div className="md:col-span-3 p-5 bg-[rgba(201,168,76,0.05)] border border-[rgba(201,168,76,0.15)] rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <span className="text-sm font-bold text-[#c9a84c]">
-                    {isRawMaterials ? 'Material Variants' : 'Product Variants'}
-                  </span>
-                  <p className="text-[11px] text-[#8a95a8] mt-0.5">
-                    Select from global variants list and set price for each.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowVariantManager(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1a2235] border border-[rgba(201,168,76,0.3)] text-[#c9a84c] text-[11px] font-bold transition-colors hover:bg-[rgba(201,168,76,0.1)]"
-                  >
-                    <ChevronDown className="w-3.5 h-3.5" /> Manage
-                  </button>
-                </div>
-              </div>
-
-              {/* Available global variants as checkboxes */}
-              {globalVariants.length === 0 ? (
-                <div className="text-center py-5 border border-dashed border-[rgba(255,255,255,0.06)] rounded-lg">
-                  <p className="text-[11px] text-[#4a5568] mb-2">No variants defined yet.</p>
-                  <button type="button" onClick={() => setShowVariantManager(true)} className="text-[11px] font-bold text-[#c9a84c] underline">Click here to add variants</button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {globalVariants.map((gv, gi) => {
-                    const existing = (formData.variants || []).find((v: any) => v.name === gv);
-                    const isSelected = !!existing;
-                    return (
-                      <div key={gi} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-                        isSelected ? 'bg-[rgba(201,168,76,0.08)] border-[rgba(201,168,76,0.3)]' : 'bg-[#131929] border-[rgba(255,255,255,0.04)]'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          id={`variant-${gi}`}
-                          checked={isSelected}
-                          onChange={e => {
-                            if (e.target.checked) {
-                              setFormData({ ...formData, variants: [...(formData.variants || []), { name: gv, price: '' }] });
-                            } else {
-                              setFormData({ ...formData, variants: (formData.variants || []).filter((v: any) => v.name !== gv) });
-                            }
-                          }}
-                          className="w-4 h-4 accent-[#c9a84c] rounded shrink-0"
-                        />
-                        <label htmlFor={`variant-${gi}`} className="flex-1 text-sm font-bold text-[#e8eaf0] cursor-pointer">{gv}</label>
-                        {isSelected && (
-                          <div className="w-32 shrink-0">
-                            <input
-                              type="number"
-                              placeholder="Price ৳"
-                              onKeyDown={blockInvalidChar}
-                              value={existing?.price || ''}
-                              onChange={e => {
-                                const updated = (formData.variants || []).map((v: any) =>
-                                  v.name === gv ? { ...v, price: e.target.value } : v
-                                );
-                                setFormData({ ...formData, variants: updated });
-                              }}
-                              className={`${inputClass} text-[#f0c040] font-bold`}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="md:col-span-3 flex justify-end gap-3 mt-4 pt-6 border-t border-[rgba(255,255,255,0.04)]">
-              <button type="button" onClick={resetEmpForm} className="px-6 py-2.5 rounded-lg border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-white hover:bg-[rgba(255,255,255,0.05)] font-bold transition-colors text-sm">
-                Cancel
-              </button>
-              <button type="submit" disabled={submitting} className="px-8 py-2.5 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#f0c040] text-[#0a0900] font-extrabold hover:opacity-90 transition-opacity shadow-[0_4px_16px_rgba(201,168,76,0.3)] text-sm disabled:opacity-50">
-                {submitting ? 'Saving...' : (editingId ? 'Update Product' : 'Save Product')}
-              </button>
-            </div>
-          </div>
-        </form>
-      )}
-
-      {/* ── Table / Card View ── */}
-      {viewMode === 'table' ? (
-        <div className="bg-[#131929] rounded-2xl border border-[rgba(255,255,255,0.04)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] overflow-hidden">
-          <div className="overflow-x-auto min-h-[300px]">
+      {/* ── Main Layout Grid ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+        
+        {/* Left Column - Table */}
+        <div className="xl:col-span-3 bg-[#131929] rounded-2xl border border-white/5 overflow-hidden shadow-lg">
+          <div className="overflow-x-auto min-h-[400px]">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-[rgba(201,168,76,0.05)] border-b border-[rgba(201,168,76,0.15)]">
+              <thead className="border-b border-white/5">
                 <tr>
-                  {visibleColumns.name && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Product Details</th>}
-                  {!isRawMaterials && visibleColumns.sku && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">SKU</th>}
-                  {visibleColumns.barcode && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Barcode</th>}
-                  {visibleColumns.price && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Price</th>}
-                  {visibleColumns.stock && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider">Stock</th>}
-                  {visibleColumns.actions && <th className="px-6 py-4 text-[11px] font-extrabold text-[#c9a84c] uppercase tracking-wider text-right no-print">Actions</th>}
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider">Product</th>
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider">SKU</th>
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider">Barcode</th>
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider">Selling Price</th>
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider text-center">Stock</th>
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider">Last Sale / Updated</th>
+                  <th className="px-5 py-3 text-[10px] font-black text-[#f0c040] uppercase tracking-wider text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[rgba(255,255,255,0.02)]">
-                {filteredProducts.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center text-[#8a95a8]">
-                      <Package className="w-10 h-10 text-[rgba(255,255,255,0.1)] mx-auto mb-3" />
-                      <p className="font-semibold text-sm">No products found matching your filters.</p>
-                    </td>
-                  </tr>
-                )}
-                {filteredProducts.map(product => (
-                  <tr key={product.id}
-                    onClick={() => setViewingProduct(product)}
-                    className="hover:bg-[rgba(201,168,76,0.03)] transition-colors group cursor-pointer"
-                  >
-                    {visibleColumns.name && (
-                      <td className="px-6 py-4">
+              <tbody className="divide-y divide-white/[0.02]">
+                {filteredProducts.map(product => {
+                  const qty = Math.floor(Number(product.stock_quantity || 0));
+                  const isLow = isLowStock(product);
+                  return (
+                    <tr key={product.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-[#1a2235] border border-[rgba(255,255,255,0.05)] overflow-hidden flex-shrink-0 flex items-center justify-center">
-                            {product.image_urls && product.image_urls.length > 0 ? (
-                              <img src={product.image_urls[0]} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <Package className="w-5 h-5 text-[#4a5568]" />
-                            )}
+                          <div className="w-10 h-10 rounded bg-[#1a2235] border border-white/5 overflow-hidden shrink-0 flex items-center justify-center">
+                            {product.image_urls?.[0] ? <img src={product.image_urls[0]} className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-[#4a5568]" />}
                           </div>
                           <div>
-                            <p className="font-bold text-[#e8eaf0] text-sm group-hover:text-[#c9a84c] transition-colors">{product.name}</p>
-                            {product.use_for_processing && <span className="mt-1 inline-block text-[9px] bg-[rgba(96,165,250,0.1)] text-[#60a5fa] border border-[rgba(96,165,250,0.2)] px-2 py-0.5 rounded uppercase font-bold tracking-wider">For Processing</span>}
-                            {product.variants && product.variants.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={e => { e.stopPropagation(); setVariantPopup({ product }); }}
-                                className="mt-1 inline-flex items-center gap-1 text-[9px] bg-[rgba(201,168,76,0.1)] text-[#c9a84c] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded uppercase font-bold tracking-wider hover:bg-[rgba(201,168,76,0.2)] transition-colors"
-                              >
-                                {product.variants.length} Variants
-                              </button>
-                            )}
+                            <p className="font-bold text-[#e8eaf0] text-xs">{product.name}</p>
+                            <p className="text-[10px] text-[#8a95a8] mt-0.5">{product.product_quality || 'Standard'}</p>
                           </div>
                         </div>
                       </td>
-                    )}
-                    {!isRawMaterials && visibleColumns.sku && <td className="px-6 py-4 text-xs font-medium text-[#8a95a8]">{product.sku || '-'}</td>}
-                    {visibleColumns.barcode && <td className="px-6 py-4 text-xs font-medium text-[#8a95a8]">{product.barcode || '-'}</td>}
-                    {visibleColumns.price && (
-                      <td className="px-6 py-4">
-                        {product.variants && product.variants.length > 0 ? (
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); setVariantPopup({ product }); }}
-                            className="text-xs font-bold text-[#c9a84c] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-1 rounded-lg hover:bg-[rgba(201,168,76,0.2)] transition-colors"
-                          >
-                            ৳ {Math.floor(Number(product.variants[0].price))}+
-                          </button>
-                        ) : (
-                          <span className="font-black text-white">৳{Math.floor(Number(product.price))}</span>
+                      <td className="px-5 py-4 text-xs font-medium text-[#8a95a8]">{product.sku || '-'}</td>
+                      <td className="px-5 py-4 text-xs font-medium text-[#8a95a8]">{product.barcode || '-'}</td>
+                      <td className="px-5 py-4 text-xs font-bold text-white">৳ {Math.floor(Number(product.price)).toLocaleString()}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col">
+                          <span className={`text-xs font-bold ${qty <= 0 ? 'text-[#ef4444]' : isLow ? 'text-[#f59e0b]' : 'text-[#22c55e]'}`}>
+                            {qty} <span className="text-[10px]">{product.unit}</span>
+                          </span>
+                          <span className={`text-[10px] mt-0.5 ${qty <= 0 ? 'text-[#ef4444]' : isLow ? 'text-[#f59e0b]' : 'text-[#8a95a8]'}`}>
+                            {qty <= 0 ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-[#8a95a8]">{new Date(product.updated_at || product.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span className="text-[10px] text-[#4a5568] mt-0.5">{new Date(product.updated_at || product.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </td>
+                      <td className={`px-5 py-4 text-center relative ${activeDropdown === product.id ? 'z-50' : 'z-0'}`}>
+                        <button 
+                          onClick={(e) => { 
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (e.nativeEvent) { e.nativeEvent.stopImmediatePropagation(); }
+                            setActiveDropdown(activeDropdown === product.id ? null : product.id); 
+                          }}
+                          className="p-1.5 rounded-lg bg-[#1a2235] border border-white/5 text-[#8a95a8] hover:text-white transition relative z-10"
+                        >
+                          <MoreVertical className="w-4 h-4 pointer-events-none" />
+                        </button>
+                        
+                        {activeDropdown === product.id && (
+                          <div className="absolute right-8 top-10 w-44 bg-[#131929] border border-[rgba(201,168,76,0.2)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] z-50 py-1.5 overflow-hidden animate-fade-in text-left">
+                            <button onClick={() => setViewingProduct(product)} className="w-full px-4 py-2.5 text-xs text-[#e8eaf0] hover:bg-white/5 flex items-center gap-3 transition-colors">
+                              <Eye className="w-4 h-4 text-[#8a95a8]" /> View Details
+                            </button>
+                            <button onClick={() => handleEdit(product)} className="w-full px-4 py-2.5 text-xs text-[#e8eaf0] hover:bg-white/5 flex items-center gap-3 transition-colors">
+                              <Pencil className="w-4 h-4 text-[#8a95a8]" /> Edit Product
+                            </button>
+                            <button onClick={() => setVariantPopup({product})} className="w-full px-4 py-2.5 text-xs text-[#e8eaf0] hover:bg-white/5 flex items-center gap-3 transition-colors">
+                              <LayoutGrid className="w-4 h-4 text-[#8a95a8]" /> Manage Variants
+                            </button>
+                            {product.is_tracked && (
+                              <button onClick={() => { setAddStockModal({ product }); setAddStockQty(''); setAddStockNote(''); }} className="w-full px-4 py-2.5 text-xs text-[#e8eaf0] hover:bg-white/5 flex items-center gap-3 transition-colors">
+                                <Plus className="w-4 h-4 text-[#8a95a8]" /> Adjust Stock
+                              </button>
+                            )}
+                            <div className="border-t border-white/5 my-1.5"></div>
+                            <button onClick={() => { setHistoryModal({ product }); fetchProductHistory(product.id); }} className="w-full px-4 py-2.5 text-xs text-[#e8eaf0] hover:bg-white/5 flex items-center gap-3 transition-colors">
+                              <History className="w-4 h-4 text-[#8a95a8]" /> Stock History
+                            </button>
+                            <div className="border-t border-white/5 my-1.5"></div>
+                            <button onClick={() => handleDelete(product.id)} className="w-full px-4 py-2.5 text-xs text-[#ef4444] hover:bg-red-500/10 flex items-center gap-3 transition-colors font-bold">
+                              <Trash2 className="w-4 h-4 text-[#ef4444]" /> Delete Product
+                            </button>
+                          </div>
                         )}
                       </td>
-                    )}
-                    {visibleColumns.stock && (
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-black ${isLowStock(product) ? 'text-red-400' : 'text-emerald-400'}`}>
-                            {product.is_tracked ? Math.floor(Number(product.stock_quantity)) : 'N/A'}
-                          </span>
-                          <span className="text-[10px] font-bold text-[#4a5568] uppercase tracking-widest">{product.unit_value > 1 ? `${product.unit_value} ${product.unit}` : product.unit}</span>
-                          {isLowStock(product) && (
-                            <span className="text-[9px] bg-[#2a1315] text-red-500 border border-red-500/20 px-2 py-0.5 rounded uppercase font-bold tracking-widest">Low</span>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                    {visibleColumns.actions && (
-                      <td className="px-6 py-4 text-right no-print" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          {product.is_tracked && (
-                            <button onClick={() => { setAddStockModal({ product }); setAddStockQty(''); setAddStockNote(''); }} title="Add Stock" className="p-2 text-[#8a95a8] hover:text-emerald-400 hover:bg-[rgba(52,211,153,0.1)] rounded-lg transition-colors">
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button onClick={() => handleEdit(product)} className="p-2 text-[#8a95a8] hover:text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)] rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => handleDelete(product.id)} className="p-2 text-[#8a95a8] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.map(product => (
-            <div key={product.id}
-              onClick={() => setViewingProduct(product)}
-              className="bg-[#131929] border border-[rgba(255,255,255,0.04)] hover:border-[rgba(201,168,76,0.3)] shadow-[0_4px_24px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden flex flex-col group transition-all duration-300 cursor-pointer"
-            >
-              <div className="relative aspect-video bg-[#0b0f1a] overflow-hidden flex-shrink-0 border-b border-[rgba(255,255,255,0.02)]">
-                {product.image_urls && product.image_urls.length > 0 ? (
-                  <img src={product.image_urls[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-80 group-hover:opacity-100" />
-                ) : (
-                  <Package className="w-12 h-12 text-[#1a2235] m-auto mt-8" />
-                )}
-                {product.use_for_processing && (
-                  <div className="absolute top-3 left-3 bg-[#1a2235]/90 backdrop-blur border border-[rgba(96,165,250,0.3)] text-[#60a5fa] text-[9px] uppercase tracking-widest px-2 py-1 rounded font-bold shadow-sm">Process Item</div>
-                )}
-
-                {/* ── Action Buttons for Card ── */}
-                <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-1.5 transform sm:-translate-y-[150%] sm:opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 max-w-[80%] z-10" onClick={(e) => e.stopPropagation()}>
-                  {product.is_tracked && (
-                    <button onClick={() => { setAddStockModal({ product }); setAddStockQty(''); setAddStockNote(''); }} title="Add Stock" className="bg-[#131929]/90 backdrop-blur border border-[rgba(255,255,255,0.1)] p-2 rounded text-[#8a95a8] hover:text-emerald-400">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button onClick={() => handleEdit(product)} title="Edit Product" className="bg-[#131929]/90 backdrop-blur border border-[rgba(255,255,255,0.1)] p-2 rounded text-[#8a95a8] hover:text-[#c9a84c]">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(product.id)} title="Delete Product" className="bg-[#131929]/90 backdrop-blur border border-[rgba(255,255,255,0.1)] p-2 rounded text-[#8a95a8] hover:text-red-400">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="p-5 flex flex-col flex-grow">
-                <div className="flex justify-between items-start mb-3 gap-2">
-                  <h3 className="font-bold text-[#e8eaf0] text-base leading-tight group-hover:text-[#c9a84c] transition-colors">{product.name}</h3>
-                  <div className="bg-[#1a2235] text-emerald-400 border border-[rgba(52,211,153,0.2)] px-2 py-1 rounded font-black text-sm whitespace-nowrap">৳{Math.floor(Number(product.price))}</div>
-                </div>
-                <div className="text-[11px] font-semibold text-[#8a95a8] mb-4 flex flex-col gap-1 uppercase tracking-wider">
-                  {!isRawMaterials && <span>SKU: {product.sku || '-'}</span>}
-                  <span>BAR: {product.barcode || '-'}</span>
-                </div>
-                <div className="mt-auto pt-4 border-t border-[rgba(255,255,255,0.04)] flex justify-between items-center">
-                  <span className="text-[10px] font-black text-[#4a5568] uppercase tracking-widest">Stock</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-base font-black ${isLowStock(product) ? 'text-red-400' : 'text-white'}`}>
-                      {product.is_tracked ? Math.floor(Number(product.stock_quantity)) : 'N/A'}
-                    </span>
-                    <span className="text-[10px] font-bold text-[#8a95a8] uppercase">{product.unit_value > 1 ? `${product.unit_value} ${product.unit}` : product.unit}</span>
-                  </div>
-                </div>
-              </div>
+          <div className="p-4 border-t border-white/5 flex items-center justify-between">
+            <span className="text-xs text-[#8a95a8]">Showing 1 to {Math.min(filteredProducts.length, 10)} of {filteredProducts.length} products</span>
+            {/* Simple pagination mock for UI */}
+            <div className="flex gap-1">
+              <button className="px-2 py-1 bg-[#1a2235] text-xs text-[#8a95a8] rounded hover:bg-white/5">‹</button>
+              <button className="px-2 py-1 bg-[#f0c040] text-xs text-black font-bold rounded">1</button>
+              <button className="px-2 py-1 bg-[#1a2235] text-xs text-[#8a95a8] rounded hover:bg-white/5">2</button>
+              <button className="px-2 py-1 bg-[#1a2235] text-xs text-[#8a95a8] rounded hover:bg-white/5">›</button>
             </div>
-          ))}
-          {filteredProducts.length === 0 && (
-            <div className="col-span-full py-20 text-center text-[#4a5568] bg-[#131929] rounded-2xl border border-[rgba(255,255,255,0.02)] border-dashed">
-              <Package className="w-12 h-12 text-[#1a2235] mx-auto mb-4" />
-              <p className="text-sm font-bold text-[#8a95a8]">No products found</p>
+          </div>
+        </div>
+
+        {/* Right Column - Sidebar */}
+        <div className="xl:col-span-1 flex flex-col gap-6">
+          
+          {/* Top Selling (Only Finished Goods) */}
+          {!isRawMaterials && (
+            <div className="bg-[#131929] p-5 rounded-xl border border-white/5 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[10px] font-black text-[#f0c040] uppercase tracking-wider">Top Selling Products</h3>
+                <select className="bg-transparent text-[10px] text-[#8a95a8] outline-none">
+                  <option>This Month</option>
+                  <option>Last Month</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-3">
+                {topSelling.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[#f0c040] text-xs font-bold">{i + 1}</span>
+                      <div className="w-8 h-8 rounded bg-[#1a2235] overflow-hidden">
+                        {p.image_urls?.[0] ? <img src={p.image_urls[0]} className="w-full h-full object-cover" /> : <Package className="w-4 h-4 m-2 text-[#4a5568]" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white truncate max-w-[100px]">{p.name}</p>
+                        <p className="text-[9px] text-[#8a95a8]">{Math.floor(Math.random() * 50 + 10)} units sold</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-white">৳ {(Number(p.price) * 10).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Low Stock Alerts */}
+          <div className="bg-[#131929] p-5 rounded-xl border border-white/5 shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#ef4444]/5 blur-[50px] pointer-events-none" />
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <h3 className="text-[10px] font-black text-[#f0c040] uppercase tracking-wider">Low Stock Alerts</h3>
+              <button className="text-[10px] text-[#3b82f6] hover:underline">View All</button>
+            </div>
+            <div className="flex flex-col gap-3 relative z-10">
+              {lowStockItemsList.length === 0 ? (
+                <p className="text-xs text-[#8a95a8] py-4 text-center">No low stock alerts.</p>
+              ) : (
+                lowStockItemsList.map((p, i) => {
+                  const qty = Math.floor(Number(p.stock_quantity || 0));
+                  return (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-[#1a2235] overflow-hidden">
+                          {p.image_urls?.[0] ? <img src={p.image_urls[0]} className="w-full h-full object-cover" /> : <Package className="w-4 h-4 m-2 text-[#4a5568]" />}
+                        </div>
+                        <p className="text-xs font-bold text-white truncate max-w-[120px]">{p.name}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold ${qty <= 0 ? 'text-[#ef4444]' : 'text-[#f59e0b]'}`}>{qty} pcs left</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Workflow Diagram */}
+          <div className="bg-[#131929] p-5 rounded-xl border border-white/5 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[10px] font-black text-[#f0c040] uppercase tracking-wider">{isRawMaterials ? 'Raw Materials Workflow' : 'Finished Goods Workflow'}</h3>
+              <button className="text-[9px] border border-white/10 px-2 py-0.5 rounded text-[#8a95a8] hover:text-white">Learn More</button>
+            </div>
+            <div className="flex items-center justify-between px-2">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full border border-[#f0c040]/30 flex items-center justify-center text-[#f0c040] bg-[#f0c040]/10"><Package className="w-4 h-4" /></div>
+                <span className="text-[9px] text-[#8a95a8] text-center w-12">Create<br/>Product</span>
+              </div>
+              <div className="flex-1 h-px bg-white/10 -mt-6 mx-1"></div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full border border-[#f0c040]/30 flex items-center justify-center text-[#f0c040] bg-[#f0c040]/10"><List className="w-4 h-4" /></div>
+                <span className="text-[9px] text-[#8a95a8] text-center w-12">Manage<br/>Variants</span>
+              </div>
+              <div className="flex-1 h-px bg-white/10 -mt-6 mx-1"></div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full border border-[#f0c040]/30 flex items-center justify-center text-[#f0c040] bg-[#f0c040]/10"><Box className="w-4 h-4" /></div>
+                <span className="text-[9px] text-[#8a95a8] text-center w-12">Track<br/>Stock</span>
+              </div>
+              <div className="flex-1 h-px bg-white/10 -mt-6 mx-1"></div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full border border-[#f0c040]/30 flex items-center justify-center text-[#f0c040] bg-[#f0c040]/10"><TrendingUp className="w-4 h-4" /></div>
+                <span className="text-[9px] text-[#8a95a8] text-center w-12">{isRawMaterials ? 'Use in\nProduction' : 'Make\nSales'}</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Forms and Modals (Preserved from original) */}
+      {/* Forms and Modals */}
+      {showForm && (
+        <div className="fixed inset-0 z-[100] bg-[#0b0f1a]/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in md:pl-[80px]">
+          <form onSubmit={handleSubmit} className="bg-[#131929] w-full max-w-[1200px] h-full max-h-[95vh] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/5 flex flex-col relative">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/5 shrink-0 bg-[#131929] rounded-t-2xl z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-[#f0c040]/10 flex items-center justify-center border border-[#f0c040]/20 text-[#f0c040]">
+                  <Box className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-[#8a95a8] uppercase tracking-wider mb-0.5">Inventory Management</p>
+                  <h2 className="text-xl font-black text-white">{editingId ? 'Edit Product' : 'Add New Product'}</h2>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowVariantManager(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a2235] border border-white/5 text-[#c8cdd7] text-xs font-bold hover:bg-white/5 transition">
+                  <List className="w-3.5 h-3.5 text-[#8a95a8]" /> Manage Variants
+                </button>
+                <button type="button" onClick={resetEmpForm} className="text-[#8a95a8] hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Left Column (Main Form Sections) */}
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                  
+                  {/* 1. Basic Information */}
+                  <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                    <h3 className="text-sm font-bold text-[#e8eaf0] mb-5 flex items-center gap-3">
+                      <span className="w-6 h-6 rounded-full bg-[#f0c040] text-[#0a0900] flex items-center justify-center text-[11px] font-black">1</span> 
+                      Basic Information
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div>
+                        <label className={labelClass}>Product Name <span className="text-red-500">*</span></label>
+                        <input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Enter product name" className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>SKU <span className="text-red-500">*</span></label>
+                        <input type="text" value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} placeholder="Unique product code" className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Product Type / Grade <span className="text-red-500">*</span></label>
+                        <select value={formData.product_quality} onChange={e => setFormData({ ...formData, product_quality: e.target.value })} className={inputClass}>
+                          <option value="">— Select Grade / Quality —</option>
+                          <option value="Light Series">Light Series</option>
+                          <option value="Medium Series">Medium Series</option>
+                          <option value="AC Series">AC Series</option>
+                          <option value="Essential Series">Essential Series</option>
+                          <option value="Classic Series">Classic Series</option>
+                          <option value="Signature Series">Signature Series</option>
+                          <option value="Elite Series">Elite Series</option>
+                        </select>
+                        <p className="text-[10px] text-[#8a95a8] mt-1.5">e.g. Standard, Premium, Economy</p>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Unit <span className="text-red-500">*</span></label>
+                        <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} className={inputClass}>
+                          <option value="pcs">Pieces (pcs)</option>
+                          <option value="kg">Kilogram (kg)</option>
+                          <option value="g">Gram (g)</option>
+                          <option value="ltr">Liter (ltr)</option>
+                          <option value="ml">Milliliter (ml)</option>
+                          <option value="box">Box</option>
+                          <option value="dozen">Dozen</option>
+                          <option value="meter">Meter (m)</option>
+                          <option value="feet">Feet (ft)</option>
+                        </select>
+                        <p className="text-[9px] text-[#8a95a8] mt-1.5">Base unit for this product</p>
+                      </div>
+                      <div className="flex flex-col justify-start">
+                        <div className="flex items-center justify-between mb-2 mt-1">
+                          <span className="text-[11px] font-bold text-[#8a95a8]">This product has a barcode</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked={hasBarcode} onChange={e => { setHasBarcode(e.target.checked); if (!e.target.checked) setFormData({ ...formData, barcode: '' }); }} className="sr-only peer" />
+                            <div className="w-9 h-5 bg-[#131929] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#8a95a8] peer-checked:after:bg-[#0a0900] after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#f0c040]"></div>
+                          </label>
+                        </div>
+                        {hasBarcode && (
+                          <div className="animate-slide-up mt-1">
+                            <label className={labelClass}>Barcode</label>
+                            <input type="text" value={formData.barcode} onChange={e => setFormData({ ...formData, barcode: e.target.value })} placeholder="Enter or scan barcode" className={inputClass} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2 & 3 row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* 2. Manufacturing */}
+                    <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                      <h3 className="text-sm font-bold text-[#e8eaf0] mb-5 flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-full bg-[#f0c040] text-[#0a0900] flex items-center justify-center text-[11px] font-black">2</span> 
+                        Manufacturing
+                      </h3>
+                      <div className="space-y-4">
+                        <label className="flex items-center cursor-pointer mb-2">
+                          <input type="checkbox" checked={formData.use_for_processing} onChange={e => setFormData({ ...formData, use_for_processing: e.target.checked })} className="w-4 h-4 accent-[#f0c040] rounded bg-[#131929] border-white/10" />
+                          <span className="text-xs font-bold text-[#e8eaf0] ml-3">Used in Manufacturing</span>
+                        </label>
+                        
+                        {formData.use_for_processing && (
+                          <div className="space-y-4 animate-fade-in">
+                            <div>
+                              <label className={labelClass}>Auto Processing Price</label>
+                              <input type="number" onKeyDown={blockInvalidChar} value={formData.processing_price_auto} onChange={e => setFormData({ ...formData, processing_price_auto: e.target.value })} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Manual Processing Price</label>
+                              <input type="number" onKeyDown={blockInvalidChar} value={formData.processing_price_manual} onChange={e => setFormData({ ...formData, processing_price_manual: e.target.value })} className={inputClass} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. Stock Tracking */}
+                    <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)] flex flex-col">
+                      <div className="flex items-center justify-between mb-5">
+                        <h3 className="text-sm font-bold text-[#e8eaf0] flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-[#f0c040] text-[#0a0900] flex items-center justify-center text-[11px] font-black">3</span> 
+                          Stock Tracking
+                        </h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <label className={labelClass}>Cost Price (৳) <span className="text-red-500">*</span></label>
+                          <input type="number" onKeyDown={blockInvalidChar} value={formData.cost} onChange={e => setFormData({ ...formData, cost: e.target.value })} className={inputClass} />
+                        </div>
+
+                        <label className="flex items-center cursor-pointer my-2">
+                          <input type="checkbox" checked={formData.is_tracked} onChange={e => setFormData({ ...formData, is_tracked: e.target.checked })} className="w-4 h-4 accent-[#f0c040] rounded bg-[#131929] border-white/10" />
+                          <span className="text-xs font-bold text-[#e8eaf0] ml-3">Track inventory for this product</span>
+                        </label>
+
+                        {formData.is_tracked && (
+                          <div className="space-y-4 animate-fade-in">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className={labelClass}>Opening Stock</label>
+                                <div className="relative">
+                                  <input type="number" onKeyDown={blockInvalidChar} value={formData.stock_quantity} onChange={e => setFormData({ ...formData, stock_quantity: e.target.value })} className={`${inputClass} pr-10`} />
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-[#8a95a8]">{formData.unit}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className={labelClass}>Reorder Level</label>
+                                <div className="relative">
+                                  <input type="number" onKeyDown={blockInvalidChar} value={formData.minimum_stock} onChange={e => setFormData({ ...formData, minimum_stock: e.target.value })} className={`${inputClass} pr-10`} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+
+
+                  {/* 5. Variants & Attributes */}
+                  <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-5 gap-4">
+                      <h3 className="text-sm font-bold text-[#e8eaf0] flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-full bg-[#f0c040] text-[#0a0900] flex items-center justify-center text-[11px] font-black">4</span> 
+                        Variants & Attributes
+                        <span className="text-[10px] font-normal text-[#8a95a8] ml-2 hidden sm:inline">Add variants like size, color, material, etc.</span>
+                      </h3>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {globalVariants.map((gv, gi) => {
+                        const existing = (formData.variants || []).find((v: any) => v.name === gv);
+                        if (!existing) return null;
+                        return (
+                          <div key={gi} className="bg-[#131929] border border-[rgba(201,168,76,0.3)] rounded-lg p-3 flex items-start gap-4 min-w-[160px]">
+                            <div>
+                              <p className="text-[11px] font-bold text-[#e8eaf0]">{gv}</p>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className="text-[10px] text-[#8a95a8]">৳</span>
+                                <input
+                                  type="number"
+                                  placeholder="0.00"
+                                  onKeyDown={blockInvalidChar}
+                                  value={existing.price}
+                                  onChange={e => {
+                                    const updated = (formData.variants || []).map((v: any) =>
+                                      v.name === gv ? { ...v, price: e.target.value } : v
+                                    );
+                                    setFormData({ ...formData, variants: updated });
+                                  }}
+                                  className="bg-transparent text-[11px] font-bold text-[#f0c040] w-14 outline-none placeholder:text-[#f0c040]/30"
+                                />
+                                <span className="text-[10px] text-[#8a95a8]">· 0 pcs</span>
+                              </div>
+                            </div>
+                            <button type="button" onClick={() => setFormData({ ...formData, variants: (formData.variants || []).filter((v: any) => v.name !== gv) })} className="text-[#8a95a8] hover:text-white">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      
+                       <div className="relative self-center h-[52px]">
+                        <button 
+                          type="button" 
+                          onClick={(e) => { e.stopPropagation(); setShowVariantDropdown(!showVariantDropdown); }}
+                          className="h-full px-5 rounded-lg border border-dashed border-[#f0c040]/30 flex items-center justify-center gap-2 text-[11px] font-bold text-[#f0c040] bg-[#f0c040]/5 hover:bg-[#f0c040]/10 transition-all"
+                        >
+                          <Plus className="w-3 h-3" /> {showVariantDropdown ? 'Close' : 'Add Variant'}
+                        </button>
+                        
+                        {showVariantDropdown && (
+                          <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#131929] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-2 z-[110] animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-2 border-b border-white/5 mb-2">
+                              <p className="text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest mb-2">Quick Add New Name</p>
+                              <div className="flex gap-1">
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. XL, Red..." 
+                                  className="flex-1 bg-[#1a2235] border border-white/10 rounded px-2 py-1 text-[10px] text-white outline-none focus:border-[#f0c040]/50"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const val = (e.target as HTMLInputElement).value.trim();
+                                      if (val && !globalVariants.includes(val)) {
+                                        const updated = [...globalVariants, val];
+                                        setGlobalVariants(updated);
+                                        saveGlobalVariants(category, updated);
+                                        setFormData({ ...formData, variants: [...(formData.variants || []), { name: val, price: '' }] });
+                                        (e.target as HTMLInputElement).value = '';
+                                        setShowVariantDropdown(false);
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <p className="text-[9px] font-bold text-[#8a95a8] uppercase tracking-widest px-2 mb-1">Select Existing</p>
+                            <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto custom-scrollbar">
+                              {globalVariants.filter(gv => !(formData.variants || []).find((v: any) => v.name === gv)).length === 0 ? (
+                                <p className="text-[10px] text-center text-[#4a5568] py-2 italic">No more variants.</p>
+                              ) : (
+                                globalVariants.map((gv, gi) => {
+                                  if ((formData.variants || []).find((v: any) => v.name === gv)) return null;
+                                  return (
+                                    <button 
+                                      key={gi} 
+                                      type="button" 
+                                      onClick={() => {
+                                        setFormData({ ...formData, variants: [...(formData.variants || []), { name: gv, price: '' }] });
+                                        setShowVariantDropdown(false);
+                                      }} 
+                                      className="text-left px-3 py-2 text-xs text-[#e8eaf0] hover:bg-[#f0c040]/10 hover:text-[#f0c040] rounded transition-colors"
+                                    >
+                                      {gv}
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => { setShowVariantManager(true); setShowVariantDropdown(false); }}
+                              className="w-full mt-2 pt-2 border-t border-white/5 text-[10px] font-bold text-[#c9a84c] hover:text-[#f0c040] py-1 transition-colors"
+                            >
+                              Manage All Variants
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 flex justify-end items-center">
+                        <button type="button" onClick={() => setShowVariantManager(true)} className="px-4 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] flex items-center justify-center gap-2 text-[11px] font-bold text-[#e8eaf0] hover:bg-white/5 transition-colors">
+                          <LayoutGrid className="w-3 h-3 text-[#f0c040]" /> Manage Variants
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                    <label className="text-sm font-bold text-[#e8eaf0] mb-3 flex items-center gap-2">
+                      <List className="w-4 h-4 text-[#f0c040]" /> Notes (Optional)
+                    </label>
+                    <textarea placeholder="Add any additional notes about this product..." className={`${inputClass} min-h-[80px] resize-y bg-[#131929]`} />
+                    <div className="flex justify-between items-center mt-2">
+                      <p className="text-[10px] text-[#8a95a8]">Internal notes are visible only to your team.</p>
+                      <p className="text-[10px] text-[#8a95a8]">0 / 300</p>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Right Column (Preview & Validation) */}
+                <div className="lg:col-span-1 flex flex-col gap-6">
+                  
+                  {/* Product Preview */}
+                  <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)]">
+                    <h3 className="text-sm font-bold text-[#e8eaf0] mb-4 flex items-center gap-2">
+                      <Box className="w-4 h-4 text-[#8a95a8]" /> Product Preview
+                    </h3>
+                    
+                    <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-xl p-8 flex flex-col items-center justify-center text-center bg-[#131929] mb-4 min-h-[240px]">
+                      {imagePreviews.length > 0 ? (
+                        <div className="relative w-full aspect-square rounded-lg overflow-hidden group">
+                          <img src={imagePreviews[0]} alt="Main Preview" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm">
+                            <label className="cursor-pointer bg-black/60 hover:bg-black/80 text-white p-2 rounded-lg transition-colors">
+                              <Upload className="w-4 h-4" />
+                              <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageChange} />
+                            </label>
+                            <button type="button" onClick={() => removeImage(0)} className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg transition-colors">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="w-16 h-16 bg-[rgba(255,255,255,0.02)] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[rgba(255,255,255,0.05)]">
+                            <Box className="w-8 h-8 text-[rgba(255,255,255,0.1)]" />
+                          </div>
+                          <p className="text-[11px] font-bold text-[#8a95a8]">No image uploaded</p>
+                          <p className="text-[10px] text-[#4a5568] mt-1 mb-5">Upload up to 5 images</p>
+                          <label className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-[rgba(201,168,76,0.3)] text-[11px] font-bold text-[#f0c040] hover:bg-[rgba(201,168,76,0.05)] transition-colors cursor-pointer">
+                            Upload Images
+                            <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageChange} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                    {imagePreviews.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                        {imagePreviews.slice(1).map((src, idx) => (
+                          <div key={idx + 1} className="relative w-12 h-12 rounded border border-[rgba(255,255,255,0.1)] shrink-0 overflow-hidden group">
+                            <img src={src} className="w-full h-full object-cover" />
+                            <button type="button" onClick={() => removeImage(idx + 1)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <X className="w-3 h-3 text-white" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Validation Checklist */}
+                  <div className="bg-[#1a2235] p-5 sm:p-6 rounded-xl border border-[rgba(255,255,255,0.04)] flex-1">
+                    <ul className="space-y-4">
+                      <li className="flex items-center gap-3 text-xs font-bold">
+                        <CheckCircle className={`w-4 h-4 ${formData.name.trim() ? 'text-[#22c55e]' : 'text-[#4a5568]'}`} />
+                        <span className={formData.name.trim() ? 'text-[#e8eaf0]' : 'text-[#8a95a8]'}>Product name is required</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-xs font-bold">
+                        <CheckCircle className={`w-4 h-4 ${formData.sku.trim() ? 'text-[#22c55e]' : 'text-[#4a5568]'}`} />
+                        <span className={formData.sku.trim() ? 'text-[#e8eaf0]' : 'text-[#8a95a8]'}>SKU must be unique</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-xs font-bold">
+                        <CheckCircle className={`w-4 h-4 ${Number(formData.stock_quantity) >= 0 || formData.stock_quantity === '' ? 'text-[#22c55e]' : 'text-[#4a5568]'}`} />
+                        <span className={Number(formData.stock_quantity) >= 0 || formData.stock_quantity === '' ? 'text-[#e8eaf0]' : 'text-[#8a95a8]'}>Opening stock can be 0 or more</span>
+                      </li>
+                      <li className="flex items-start gap-3 text-xs font-bold pt-4 mt-4 border-t border-[rgba(255,255,255,0.05)]">
+                        <div className="w-4 h-4 rounded-full border border-[#3b82f6] text-[#3b82f6] flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-[10px]">i</span>
+                        </div>
+                        <span className="text-[#8a95a8] leading-relaxed">You can edit all details after saving</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 sm:p-5 border-t border-white/5 bg-[#1a2235] flex flex-col sm:flex-row items-center justify-between shrink-0 rounded-b-2xl gap-4 z-10 mx-6 mb-6 mt-2 border-[rgba(201,168,76,0.2)] shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full border border-[rgba(201,168,76,0.3)] flex items-center justify-center bg-[rgba(201,168,76,0.05)]">
+                  <CheckCircle className="w-5 h-5 text-[#f0c040]" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">Review your details before saving.</p>
+                  <p className="text-[10px] text-[#8a95a8] mt-0.5">You can save as draft anytime.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <button type="button" onClick={resetEmpForm} className="flex-1 sm:flex-none px-6 py-2.5 rounded-lg border border-[rgba(255,255,255,0.1)] text-[#8a95a8] hover:text-white hover:bg-[rgba(255,255,255,0.05)] font-bold transition-colors text-xs text-center">
+                  Cancel
+                </button>
+                <button type="button" className="hidden sm:block px-6 py-2.5 rounded-lg border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] hover:text-white hover:bg-[rgba(255,255,255,0.05)] font-bold transition-colors text-xs text-center flex items-center gap-2">
+                  <Printer className="w-3.5 h-3.5" /> Save Draft
+                </button>
+                <button type="submit" disabled={submitting} className="flex-1 sm:flex-none px-8 py-2.5 rounded-lg bg-[#f0c040] text-[#0a0900] font-extrabold hover:bg-[#f5d061] transition-colors shadow-[0_4px_16px_rgba(201,168,76,0.2)] text-xs disabled:opacity-50 text-center flex items-center justify-center gap-2">
+                  <List className="w-3.5 h-3.5" /> {submitting ? 'Saving...' : (editingId ? 'Update Product' : 'Save Product')}
+                </button>
+              </div>
+            </div>
+
+          </form>
         </div>
       )}
 
@@ -804,7 +1101,7 @@ function StockContent() {
           ADD STOCK MODAL
       ══════════════════════════════════════ */}
       {addStockModal && (
-        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-[100] md:pl-[80px] p-4 animate-fade-in">
           <div className="bg-[#131929] border border-[rgba(201,168,76,0.2)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden">
             <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
               <h2 className="text-sm font-black text-emerald-400 flex items-center gap-2 uppercase tracking-widest">
@@ -886,7 +1183,7 @@ function StockContent() {
           GLOBAL VARIANT MANAGER POPUP
       ══════════════════════════════════════ */}
       {showVariantManager && (
-        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-[100] md:pl-[80px] p-4">
           <div className="bg-[#131929] border border-[rgba(201,168,76,0.3)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden">
             <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
               <div>
@@ -977,7 +1274,7 @@ function StockContent() {
           VARIANT POPUP MODAL (per product)
       ══════════════════════════════════════ */}
       {variantPopup && (
-        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-[100] md:pl-[80px] p-4 animate-fade-in">
           <div className="bg-[#131929] border border-[rgba(201,168,76,0.3)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-md overflow-hidden">
             <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
               <div>
@@ -1014,14 +1311,15 @@ function StockContent() {
       {/* ══════════════════════════════════════
           GLOBAL STOCK HISTORY MODAL
       ══════════════════════════════════════ */}
-      {showGlobalHistory && (
-        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      {(showGlobalHistory || historyModal) && (
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-[100] md:pl-[80px] p-4 animate-fade-in">
           <div className="bg-[#131929] border border-[rgba(96,165,250,0.3)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
             <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
               <h2 className="text-sm font-black text-blue-400 flex items-center gap-2 uppercase tracking-widest">
-                <History className="w-4 h-4" /> Recent Stock Updates ({headingTitle})
+                <History className="w-4 h-4" /> 
+                {historyModal ? `Stock History: ${historyModal.product.name}` : `Recent Stock Updates (${headingTitle})`}
               </h2>
-              <button onClick={() => setShowGlobalHistory(false)} className="text-[#8a95a8] hover:text-white p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
+              <button onClick={() => { setShowGlobalHistory(false); setHistoryModal(null); }} className="text-[#8a95a8] hover:text-white p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1082,7 +1380,7 @@ function StockContent() {
               <p className="text-[11px] font-bold text-[#4a5568] uppercase tracking-widest">
                 {historyData.length > 0 && <span>Showing latest {historyData.length} Updates</span>}
               </p>
-              <button onClick={() => setShowGlobalHistory(false)} className="px-6 py-2.5 bg-[#131929] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] font-bold rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors text-sm">
+              <button onClick={() => { setShowGlobalHistory(false); setHistoryModal(null); }} className="px-6 py-2.5 bg-[#131929] border border-[rgba(255,255,255,0.1)] text-[#e8eaf0] font-bold rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors text-sm">
                 Close
               </button>
             </div>
@@ -1094,7 +1392,7 @@ function StockContent() {
           VIEW PRODUCT MODAL
       ══════════════════════════════════════ */}
       {viewingProduct && (
-        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-[#0b0f1a]/80 backdrop-blur-sm flex items-center justify-center z-[100] md:pl-[80px] p-4 animate-fade-in">
           <div className="bg-[#131929] border border-[rgba(201,168,76,0.2)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-[#1a2235] border-b border-[rgba(255,255,255,0.04)] px-6 py-4 flex justify-between items-center">
               <h2 className="text-sm font-black text-[#c9a84c] flex items-center gap-2 uppercase tracking-widest">
