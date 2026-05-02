@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Plus, Trash2, FileText, ShoppingCart, ArrowLeftRight, Calculator, CreditCard, PenTool, CheckCircle, PackageSearch, Banknote, Building2, Wallet, Eye, X, Printer } from 'lucide-react';
+import { Plus, Trash2, FileText, ShoppingCart, ArrowLeftRight, Calculator, CreditCard, PenTool, CheckCircle, PackageSearch, Banknote, Building2, Wallet, Eye, X, Printer, Search, Filter, ChevronLeft, ChevronRight, TrendingUp, MoreVertical, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 
 type InvoiceType = 'buy' | 'sell' | 'return' | 'exchange';
@@ -71,34 +71,42 @@ function InvoicesContent() {
    const [submitting, setSubmitting] = useState(false);
    const [previousDue, setPreviousDue] = useState(0);
 
-    useEffect(() => {
-       async function calcDue() {
-          if (!form.contact_id) {
-             setPreviousDue(0);
-             return;
-          }
-          try {
-             // OPTIMIZATION: Fetch only the due balance calculated by the backend instead of thousands of invoices/payments
-             const contactType = (activeTab === 'buy') ? 'supplier' : 'customer';
-             const res = await api.getContactDue(form.contact_id, contactType);
-             let due = res.due || 0;
-             
-             // Force round to 2 decimals to prevent floating point drift (e.g. 50.300004 -> 50.30)
-             setPreviousDue(Math.round(due * 100) / 100 > 0 ? Math.round(due * 100) / 100 : 0);
-          } catch (e) {
-             console.error('calcDue Error:', e);
-             setPreviousDue(0);
-          }
-       }
-       calcDue();
-    }, [form.contact_id, activeTab]);
+   useEffect(() => {
+      async function calcDue() {
+         if (!form.contact_id) {
+            setPreviousDue(0);
+            return;
+         }
+         try {
+            // OPTIMIZATION: Fetch only the due balance calculated by the backend instead of thousands of invoices/payments
+            const contactType = (activeTab === 'buy') ? 'supplier' : 'customer';
+            const res = await api.getContactDue(form.contact_id, contactType);
+            let due = res.due || 0;
 
+            // Force round to 2 decimals to prevent floating point drift (e.g. 50.300004 -> 50.30)
+            setPreviousDue(Math.round(due * 100) / 100 > 0 ? Math.round(due * 100) / 100 : 0);
+         } catch (e) {
+            console.error('calcDue Error:', e);
+            setPreviousDue(0);
+         }
+      }
+      calcDue();
+   }, [form.contact_id, activeTab]);
+
+   // Real-time Auto-polling: Refresh data every 10 seconds
    useEffect(() => {
       fetchInvoices();
-      // Only fetch contacts if they haven't been loaded for this type yet
-      // fetchData logic now handles internal caching
       fetchData();
-   }, [activeTab]);
+
+      const pollInterval = setInterval(() => {
+         if (!showBuilder) {
+            fetchInvoices();
+            fetchData();
+         }
+      }, 10000);
+
+      return () => clearInterval(pollInterval);
+   }, [activeTab, showBuilder]);
 
    useEffect(() => {
       const tab = searchParams.get('tab');
@@ -137,7 +145,7 @@ function InvoicesContent() {
    const fetchData = async (forceContacts = false) => {
       try {
          const targetType = (activeTab === 'buy') ? 'supplier' : 'customer';
-         
+
          // Only fetch products, employees, and accounts if they haven't been loaded yet
          const promises: Promise<any>[] = [];
          const fetchFlags = { products: false, employees: false, accounts: false, contacts: false };
@@ -154,19 +162,19 @@ function InvoicesContent() {
             promises.push(api.getInternalAccounts({ ordering: 'provider_name' }));
             fetchFlags.accounts = true;
          }
-         
+
          // Always fetch contacts for the current tab type if it's a new type or forced
          promises.push(api.getContacts({ type: targetType }));
          fetchFlags.contacts = true;
 
          const results = await Promise.all(promises);
-         
+
          let resultIdx = 0;
          if (fetchFlags.products) setProducts(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
          if (fetchFlags.employees) setEmployees(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
          if (fetchFlags.accounts) setInternalAccounts(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
          if (fetchFlags.contacts) setContacts(Array.isArray(results[resultIdx]) ? results[resultIdx++] : results[resultIdx++].results ?? []);
-         
+
       } catch (err) { console.error('fetchData:', err); }
    };
 
@@ -237,10 +245,10 @@ function InvoicesContent() {
       } else if (field === 'selected_head') {
          const prod = products.find(p => p.id === newItems[index].product_id);
          if (prod && prod.variants && Array.isArray(prod.variants)) {
-             const variant = prod.variants.find((v: any) => v.name === finalValue);
-             if (variant) {
-                 newItems[index].price = Number(variant.price || 0);
-             }
+            const variant = prod.variants.find((v: any) => v.name === finalValue);
+            if (variant) {
+               newItems[index].price = Number(variant.price || 0);
+            }
          }
       }
       setForm({ ...form, [listName]: newItems });
@@ -562,137 +570,307 @@ function InvoicesContent() {
       return true; // Fallback filter just in case 'type' is missing/different
    });
 
+   // Metrics Calculation
+   const totalInvoices = invoices.length;
+   const paidInvoices = invoices.filter(inv => inv.payment_status === 'paid').length;
+   const paidPercentage = totalInvoices > 0 ? ((paidInvoices / totalInvoices) * 100).toFixed(1) : '0.0';
+   const totalRevenue = invoices.reduce((acc, inv) => acc + Number(inv.total || 0), 0);
+   const totalDue = invoices.reduce((acc, inv) => acc + Number(inv.due_amount || 0), 0);
+
+   // REAL ANALYSIS CALCULATIONS (Month-over-Month)
+   const getMoMGrowth = (type: 'count' | 'total' | 'due' | 'paid_count') => {
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+      const lastYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+
+      const thisMonthInvoices = invoices.filter(inv => {
+         const d = new Date(inv.date);
+         return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+      });
+
+      const lastMonthInvoices = invoices.filter(inv => {
+         const d = new Date(inv.date);
+         return d.getMonth() === lastMonth && d.getFullYear() === lastYear;
+      });
+
+      let current = 0;
+      let previous = 0;
+
+      if (type === 'count') {
+         current = thisMonthInvoices.length;
+         previous = lastMonthInvoices.length;
+      } else if (type === 'total') {
+         current = thisMonthInvoices.reduce((acc, i) => acc + Number(i.total || 0), 0);
+         previous = lastMonthInvoices.reduce((acc, i) => acc + Number(i.total || 0), 0);
+      } else if (type === 'due') {
+         current = thisMonthInvoices.reduce((acc, i) => acc + Number(i.due_amount || 0), 0);
+         previous = lastMonthInvoices.reduce((acc, i) => acc + Number(i.due_amount || 0), 0);
+      } else if (type === 'paid_count') {
+         current = thisMonthInvoices.filter(i => i.payment_status === 'paid').length;
+         previous = lastMonthInvoices.filter(i => i.payment_status === 'paid').length;
+      }
+
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+   };
+
+   const countGrowth = getMoMGrowth('count');
+   const revenueGrowth = getMoMGrowth('total');
+   const dueGrowth = getMoMGrowth('due');
+
    return (
       <div className="pb-12 dropdown-container" style={{ fontFamily: "'Inter', sans-serif" }}>
-         <div style={{
-            background: 'linear-gradient(135deg, #0e1628, #131929)',
-            border: '1px solid ' + N.border,
-            borderRadius: 16,
-            padding: '24px 30px',
-            marginBottom: 20,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            flexWrap: 'wrap',
-            gap: 16
-         }}>
-            <div>
-               <p style={{ color: N.gold, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FileText style={{ width: 14, height: 14 }} /> Comprehensive Invoicing Engine
-               </p>
-               <h1 style={{ fontSize: 24, fontWeight: 900, color: N.goldBr, margin: '0 0 6px' }}>
-                  {activeTab === 'buy' ? 'Purchases (Buy)' : activeTab === 'sell' ? 'Sales (Sell)' : 'Sales Returns (Exchange)'}
+         {/* HEADER */}
+         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+               <h1 style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', margin: 0 }}>
+                  {activeTab === 'buy' ? 'Purchase Invoicing' : activeTab === 'sell' ? 'Sales Invoicing' : 'Returns Invoicing'}
                </h1>
-               <p style={{ color: N.textSub, fontSize: 13, margin: 0 }}>
-                  {activeTab === 'buy' ? 'Record vendor purchases, process upfront payments.' :
-                     activeTab === 'sell' ? 'Generate customer invoices and track revenue.' :
-                        'Process item exchange: items returned vs items issued.'}
-               </p>
             </div>
-
             {!showBuilder && canAdd && (
-               <button onClick={() => { resetForm(); setShowBuilder(true); }}
-                  style={{
-                     display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10,
-                     border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, ' + N.gold + ', ' + N.goldBr + ')',
-                     color: '#0a0900', fontWeight: 800, fontSize: 13, boxShadow: '0 4px 14px rgba(201,168,76,.35)'
+               <div style={{ display: 'flex', gap: 12 }}>
+                  <button onClick={() => { resetForm(); setShowBuilder(true); }}
+                     style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8,
+                        border: 'none', cursor: 'pointer', background: '#fbbf24',
+                        color: '#0f172a', fontWeight: 600, fontSize: 14
+                     }}>
+                     <Plus style={{ width: 18, height: 18 }} />
+                     New {activeTab === 'buy' ? 'Purchase' : activeTab === 'sell' ? 'Sales' : 'Return'} Invoice
+                  </button>
+                  <button style={{
+                     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px',
+                     borderRadius: 8, border: 'none', cursor: 'pointer', background: '#1e293b', color: '#94a3b8'
                   }}>
-                  <Plus style={{ width: 16, height: 16 }} />
-                  Create {activeTab === 'buy' ? 'Purchase' : activeTab === 'sell' ? 'Sale' : 'Return/Exchange'}
-               </button>
+                     <MoreVertical style={{ width: 20, height: 20 }} />
+                  </button>
+               </div>
             )}
          </div>
 
-         {!showBuilder && (
-            <div style={{ display: 'flex', gap: 10, marginBottom: 20, overflowX: 'auto', paddingBottom: 10 }}>
-               {[
-                  { id: 'buy', name: 'Purchase (Buy)', icon: ShoppingCart },
-                  { id: 'sell', name: 'Sales (Sell)', icon: FileText },
-                  { id: 'exchange', name: 'Sales Returns', icon: ArrowLeftRight },
-               ].map(t => (
-                  <button key={t.id} onClick={() => {
-                     setActiveTab(t.id as any);
-                     router.push(`/invoices?tab=${t.id}`);
-                  }} style={{
-                     display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, border: '1px solid ' + (activeTab === t.id ? N.gold : N.borderSub),
-                     background: activeTab === t.id ? 'rgba(201,168,76,.15)' : N.card, color: activeTab === t.id ? N.goldBr : N.textSub,
-                     fontSize: 13, fontWeight: 800, cursor: 'pointer', transition: 'all .2s', whiteSpace: 'nowrap'
-                  }}>
-                     <t.icon style={{ width: 14, height: 14 }} />
-                     {t.name}
-                  </button>
-               ))}
-            </div>
-         )}
-
          {!showBuilder ? (
-            <div style={{ background: N.card, border: '1px solid ' + N.borderSub, borderRadius: 14, overflow: 'hidden' }}>
-               <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-                     <thead>
-                        <tr style={{ background: 'rgba(201,168,76,.06)' }}>
-                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Invoice ID / Date</th>
-                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>{activeTab === 'buy' ? 'Supplier' : 'Customer'}</th>
-                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Total Value</th>
-                           <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Payment Status</th>
-                           <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: N.gold, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Actions</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {invoices.length === 0 && (
-                           <tr>
-                              <td colSpan={5} style={{ padding: '56px 20px', textAlign: 'center' }}>
-                                 <FileText style={{ width: 34, height: 34, color: 'rgba(201,168,76,.18)', margin: '0 auto 10px' }} />
-                                 <p style={{ fontSize: 14, color: N.textMut, fontWeight: 600, margin: 0 }}>No records found for {activeTab}</p>
-                              </td>
-                           </tr>
-                        )}
-                        {invoices.map((inv, i) => (
-                           <tr key={inv.id}
-                              onClick={() => setViewingInvoice(inv)}
-                              style={{ borderBottom: i < invoices.length - 1 ? '1px solid ' + N.borderSub : 'none', transition: 'background .12s', cursor: 'pointer' }}
-                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(201,168,76,.04)'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              <td style={{ padding: '13px 20px' }}>
-                                 <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: N.text }}>#{inv.id.substring(0, 8).toUpperCase()}</span>
-                                 <div style={{ fontSize: 11, color: N.textSub, marginTop: 2 }}>{new Date(inv.date).toLocaleDateString()}</div>
-                              </td>
-                              <td style={{ padding: '13px 20px' }}>
-                                 <span style={{ fontWeight: 800, color: N.goldBr, fontSize: 13 }}>{inv.contact_details?.name || inv.contacts?.name || 'Unknown'}</span>
-                                 {(inv.contact_details?.shop_name || inv.contacts?.shop_name) && <span style={{ display: 'block', fontSize: 11, color: 'rgba(201,168,76,.6)' }}>{inv.contact_details?.shop_name || inv.contacts?.shop_name}</span>}
-                              </td>
-                              <td style={{ padding: '13px 20px', fontWeight: 900, color: N.text, fontSize: 14 }}>
-                                 ৳ {Number(inv.total).toLocaleString()}
-                              </td>
-                              <td style={{ padding: '13px 20px' }}>
-                                 <span style={{
-                                    display: 'inline-flex', padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em',
-                                    background: inv.payment_status === 'paid' ? 'rgba(52,211,153,.1)' : inv.payment_status === 'partial' ? 'rgba(201,168,76,.1)' : 'rgba(248,113,113,.1)',
-                                    color: inv.payment_status === 'paid' ? N.green : inv.payment_status === 'partial' ? N.gold : N.red,
-                                    border: '1px solid ' + (inv.payment_status === 'paid' ? 'rgba(52,211,153,.2)' : inv.payment_status === 'partial' ? 'rgba(201,168,76,.2)' : 'rgba(248,113,113,.2)')
-                                 }}>
-                                    {inv.payment_status}
-                                 </span>
-                                 {Number(inv.due_amount) > 0 && <div style={{ fontSize: 10, color: N.red, fontWeight: 800, marginTop: 4 }}>Due: ৳ {inv.due_amount}</div>}
-                              </td>
-                              <td style={{ padding: '13px 20px', textAlign: 'right' }}>
-                                 {canDelete && (
-                                    <div style={{ display: 'inline-flex', gap: 4 }}>
-                                       <button onClick={(e) => { e.stopPropagation(); handleDelete(inv.id); }} title="Delete"
-                                          style={{ padding: '6px 8px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,.3)', transition: 'all .12s' }}
-                                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,.1)'; e.currentTarget.style.color = N.red; }}
-                                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,.3)'; }}>
-                                          <Trash2 style={{ width: 15, height: 15 }} />
-                                       </button>
-                                    </div>
-                                 )}
-                              </td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
+            <>
+               {/* TAB NAVIGATION */}
+               <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                  {[
+                     { id: 'buy', name: 'Purchase Invoices', icon: ShoppingCart },
+                     { id: 'sell', name: 'Sales Invoices', icon: FileText },
+                     { id: 'exchange', name: 'Returns', icon: ArrowLeftRight },
+                  ].map(t => (
+                     <button key={t.id} onClick={() => {
+                        setActiveTab(t.id as any);
+                        router.push(`/invoices?tab=${t.id}`);
+                     }} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8,
+                        border: '1px solid ' + (activeTab === t.id ? '#fbbf24' : '#1e293b'),
+                        background: activeTab === t.id ? 'rgba(251, 191, 36, 0.1)' : '#0f172a',
+                        color: activeTab === t.id ? '#fbbf24' : '#94a3b8',
+                        fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all .2s'
+                     }}>
+                        <t.icon style={{ width: 16, height: 16 }} />
+                        {t.name}
+                     </button>
+                  ))}
                </div>
-            </div>
+
+               {/* METRIC CARDS */}
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 }}>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                     <div style={{ width: 48, height: 48, borderRadius: 24, background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FileText style={{ width: 24, height: 24, color: '#3b82f6' }} />
+                     </div>
+                     <div>
+                        <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4 }}>Total Invoices</div>
+                        <div style={{ color: '#f9fafb', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>{totalInvoices.toLocaleString()}</div>
+                        <div style={{ color: countGrowth >= 0 ? '#34d399' : '#ef4444', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                           <TrendingUp style={{ width: 12, height: 12, transform: countGrowth >= 0 ? 'none' : 'scaleY(-1)' }} /> 
+                           {Math.abs(countGrowth).toFixed(1)}% vs last month
+                        </div>
+                     </div>
+                  </div>
+
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                     <div style={{ width: 48, height: 48, borderRadius: 24, background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CheckCircle2 style={{ width: 24, height: 24, color: '#10b981' }} />
+                     </div>
+                     <div>
+                        <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4 }}>Paid Invoices</div>
+                        <div style={{ color: '#f9fafb', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>{paidInvoices.toLocaleString()}</div>
+                        <div style={{ color: '#9ca3af', fontSize: 12 }}>{paidPercentage}% of total</div>
+                     </div>
+                  </div>
+
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                     <div style={{ width: 48, height: 48, borderRadius: 24, background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Wallet style={{ width: 24, height: 24, color: '#f59e0b' }} />
+                     </div>
+                     <div>
+                        <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4 }}>Due Amount</div>
+                        <div style={{ color: '#f9fafb', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>৳ {totalDue.toLocaleString()}</div>
+                        <div style={{ color: dueGrowth <= 0 ? '#34d399' : '#ef4444', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                           <TrendingUp style={{ width: 12, height: 12, transform: dueGrowth <= 0 ? 'scaleY(-1)' : 'none' }} /> 
+                           {Math.abs(dueGrowth).toFixed(1)}% vs last month
+                        </div>
+                     </div>
+                  </div>
+
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                     <div style={{ width: 48, height: 48, borderRadius: 24, background: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <TrendingUp style={{ width: 24, height: 24, color: '#8b5cf6' }} />
+                     </div>
+                     <div>
+                        <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4 }}>This Month Revenue</div>
+                        <div style={{ color: '#f9fafb', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>৳ {totalRevenue.toLocaleString()}</div>
+                        <div style={{ color: revenueGrowth >= 0 ? '#34d399' : '#ef4444', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                           <TrendingUp style={{ width: 12, height: 12, transform: revenueGrowth >= 0 ? 'none' : 'scaleY(-1)' }} /> 
+                           {Math.abs(revenueGrowth).toFixed(1)}% vs last month
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* FILTERS BAR */}
+               <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, position: 'relative', minWidth: 260 }}>
+                     <Search style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, color: '#64748b' }} />
+                     <input type="text" placeholder="Search by invoice no, customer, or phone..."
+                        style={{ width: '100%', padding: '12px 16px 12px 48px', borderRadius: 8, border: '1px solid #1e293b', background: '#0f172a', color: '#f8fafc', fontSize: 14, outline: 'none' }} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 16px' }}>
+                     <span style={{ color: '#94a3b8', fontSize: 14 }}>Status:</span>
+                     <select style={{ background: 'transparent', border: 'none', color: '#f8fafc', fontSize: 14, outline: 'none', cursor: 'pointer' }}>
+                        <option value="all">All</option>
+                        <option value="paid">Paid</option>
+                        <option value="partial">Partial</option>
+                        <option value="unpaid">Unpaid</option>
+                     </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 16px' }}>
+                     <span style={{ color: '#94a3b8', fontSize: 14 }}>Date:</span>
+                     <select style={{ background: 'transparent', border: 'none', color: '#f8fafc', fontSize: 14, outline: 'none', cursor: 'pointer' }}>
+                        <option value="this_month">This Month</option>
+                        <option value="last_month">Last Month</option>
+                        <option value="last_3_months">Last 3 Months</option>
+                     </select>
+                  </div>
+                  <button style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 8, border: '1px solid #1e293b', background: 'transparent', color: '#cbd5e1', fontSize: 14, cursor: 'pointer' }}>
+                     <Filter style={{ width: 16, height: 16 }} /> Filters
+                  </button>
+               </div>
+
+               {/* TABLE */}
+               <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                           <tr style={{ background: '#1e293b', borderBottom: '1px solid #334155' }}>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>INVOICE NO</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CUSTOMER</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PAID</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>DUE</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PAYMENT STATUS</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE</th>
+                              <th style={{ padding: '16px 24px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>ACTIONS</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           {invoices.length === 0 && (
+                              <tr>
+                                 <td colSpan={9} style={{ padding: '48px 24px', textAlign: 'center', color: '#94a3b8' }}>
+                                    <FileText style={{ width: 32, height: 32, margin: '0 auto 12px', opacity: 0.5 }} />
+                                    <p>No invoices found</p>
+                                 </td>
+                              </tr>
+                           )}
+                           {invoices.map((inv, i) => {
+                              const itemsCount = inv.items ? inv.items.reduce((acc: number, curr: any) => acc + Number(curr.quantity), 0) : 0;
+                              return (
+                                 <tr key={inv.id} style={{ borderBottom: '1px solid #1f2937' }}>
+                                    <td style={{ padding: '16px 24px', color: '#cbd5e1', fontSize: 14, fontWeight: 500 }}>
+                                       #{inv.id.substring(0, 8).toUpperCase()}
+                                    </td>
+                                    <td style={{ padding: '16px 24px' }}>
+                                       <div style={{ color: '#cbd5e1', fontSize: 14, fontWeight: 500 }}>{inv.contact_details?.name || inv.contacts?.name || 'Unknown'}</div>
+                                       <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>{inv.contact_details?.shop_name || inv.contacts?.shop_name || ''}</div>
+                                    </td>
+                                    <td style={{ padding: '16px 24px', color: '#cbd5e1', fontSize: 14 }}>
+                                       {itemsCount} items
+                                    </td>
+                                    <td style={{ padding: '16px 24px', color: '#cbd5e1', fontSize: 14 }}>
+                                       ৳ {Number(inv.total).toLocaleString()}
+                                    </td>
+                                    <td style={{ padding: '16px 24px', color: '#34d399', fontSize: 14 }}>
+                                       ৳ {Number(inv.paid_amount || 0).toLocaleString()}
+                                    </td>
+                                    <td style={{ padding: '16px 24px', color: '#ef4444', fontSize: 14 }}>
+                                       ৳ {Number(inv.due_amount || 0).toLocaleString()}
+                                    </td>
+                                    <td style={{ padding: '16px 24px' }}>
+                                       <span style={{
+                                          display: 'inline-flex', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
+                                          background: inv.payment_status === 'paid' ? 'rgba(16, 185, 129, 0.1)' : inv.payment_status === 'partial' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                          color: inv.payment_status === 'paid' ? '#10b981' : inv.payment_status === 'partial' ? '#f59e0b' : '#ef4444',
+                                          border: `1px solid ${inv.payment_status === 'paid' ? '#10b981' : inv.payment_status === 'partial' ? '#f59e0b' : '#ef4444'}40`
+                                       }}>
+                                          {inv.payment_status}
+                                       </span>
+                                    </td>
+                                    <td style={{ padding: '16px 24px', color: '#cbd5e1', fontSize: 14 }}>
+                                       {new Date(inv.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </td>
+                                    <td style={{ padding: '16px 24px', textAlign: 'right' }}>
+                                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                                          <button onClick={() => setViewingInvoice(inv)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 13, cursor: 'pointer', transition: 'color 0.2s' }}>
+                                             <Eye style={{ width: 14, height: 14 }} /> View
+                                          </button>
+                                          {canDelete && (
+                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(inv.id); }} style={{ padding: '6px', borderRadius: 6, border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>
+                                                <MoreVertical style={{ width: 16, height: 16 }} />
+                                             </button>
+                                          )}
+                                       </div>
+                                    </td>
+                                 </tr>
+                              );
+                           })}
+                        </tbody>
+                     </table>
+                  </div>
+
+                  {/* PAGINATION */}
+                  {invoices.length > 0 && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid #1f2937' }}>
+                        <div style={{ color: '#94a3b8', fontSize: 13 }}>
+                           Showing 1 to {Math.min(invoices.length, 10)} of {invoices.length} invoices
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                           <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer' }}>
+                              <ChevronLeft style={{ width: 16, height: 16 }} />
+                           </button>
+                           <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #fbbf24', background: 'rgba(251, 191, 36, 0.1)', color: '#fbbf24', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                              1
+                           </button>
+                           <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                              2
+                           </button>
+                           <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                              ...
+                           </button>
+                           <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                              10
+                           </button>
+                           <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer' }}>
+                              <ChevronRight style={{ width: 16, height: 16 }} />
+                           </button>
+                        </div>
+                     </div>
+                  )}
+               </div>
+            </>
          ) : (
             <div style={{ background: N.card, border: '1px solid ' + N.border, borderRadius: 16, overflow: 'hidden', padding: 24 }}>
                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
